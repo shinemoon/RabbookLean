@@ -1,0 +1,28 @@
+﻿{
+	"name": "LeanRabbook",
+	"version": "1.3.1",
+	"description": "Auto Parser of Novel",
+    "short_name": "LRabook",
+	"background":{
+		"page":"background.html",
+        "persisitent": true
+	},
+	"manifest_version": 2,
+	"icons": {
+	"48": "images/icon.png",
+	"128": "images/icon.png"
+  	},
+    "browser_action": {
+        "default_icon": "images/icon.png",
+        "default_popup": "index.html",
+        "default_title": "RabbookLean"
+    },
+    "web_accessible_resources": [
+        "font/font.ttf"
+    ], 
+  	"permissions": [
+		"tabs",
+		"storage",
+		"<all_urls>"
+	]
+}

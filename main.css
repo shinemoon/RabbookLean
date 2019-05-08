@@ -1,0 +1,158 @@
+html {
+    height:100%;
+}
+
+
+#lrbk_title {
+    cursor:pointer;
+    word-break:keep-all;/* 不换行 */
+    white-space:nowrap;/* 不换行 */
+    overflow:hidden;/* 内容超出宽度时隐藏超出部分的内容 */
+    text-overflow:ellipsis;/* 当对象内文本溢出时显示省略标记(...) ；需与overflow:hidden;一起使用。*/
+    position:fixed!important;
+    left:0px;
+    margin-top:0px!important;
+    margin-bottom:10px!important;
+    padding-left:30px!important;
+    padding-right:30px!important;
+    top:-10px!important;
+    opacity:1!important;
+    padding-top: 30px!important;
+    padding-bottom: 10px!important;
+    width:110%;
+    box-shadow:rgba(0,0,0,0.1) -3px 3px 4px ;
+   // font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+    font-family: "Kesong";
+    height: 30px;
+    background: #f8f8f8!important;
+    z-index:998;
+}
+
+
+#lrbk_title h1 , #lrbk_title h2 ,#lrbk_title h3 ,#lrbk_title h4  {
+    font-size:24px!important;
+    font-weight:normal!important;
+    font-style:normal!important;
+    //color: #eca88c!important;
+    color: #222222!important;
+}
+
+#gnContent *{
+}
+
+
+
+#nav {
+    position:fixed!important;
+    right:0px;
+    bottom:0px;
+    color: #fff!important;
+    //font-family: Baskerville, "Times New Roman", "Liberation Serif", STFangsong, FangSong, FangSong_GB2312, "CWTEX\-F", serif;
+    font-family: "Kesong";
+}
+
+#nav a:hover, #nav span:hover{
+    cursor:pointer;
+    border-left:2px solid lightgreen;
+}
+
+#nav td{
+    height:35px;
+}
+
+#nav a, #nav span{
+    text-decoration: none;
+    margin-bottom:20px;
+    color:#333;
+    background:#fff;
+    padding-right: 20px;
+    padding-left: 15px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+    border-left:2px solid green;
+    text-align:right;
+    width:120px;
+}
+
+
+body {
+    background:transparent;
+    height:100%;
+    overflow:hidden;
+}
+
+#gnContent  {
+    width:100%;
+    background: transparent;
+    font-family: "Kesong"!important; 
+    font-size:1.25rem;
+    color:black;
+    margin-left:auto;
+    margin-right:auto;
+    margin-top:80px;
+    line-height:1.5rem;
+}
+
+#lrbk_title {
+    position:fixed;
+    left:0px;
+    top:20px;
+}
+
+#nav {
+}
+
+/*
+
+.bb-item{
+    background:#eeeeee;
+    width:100%;
+}
+*/
+
+.bb-item{
+ //   background:#eeeeee;
+    overflow:hidden!important;/* 内容超出宽度时隐藏超出部分的内容 */
+}
+
+
+.container,
+.bb-custom-wrapper,
+.bb-bookblock {
+	width: 100%;
+	height: 100%;
+}
+
+.container {
+	position: relative;
+	left: 0px;
+	transition: left 0.3s ease-in-out;
+}
+
+#indexinfo {
+    position:fixed;
+    right:20px;
+    top:30px;
+    font-size: 12px;
+    color: #AAA;
+    opacity: 0.4;
+    //font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, DFKai-SB, "TW\-Kai", serif;
+    font-family: "Kesong";
+    z-index:999;
+}
+
+#hint {
+    position:fixed;
+    background:rgba(0,200,0,0.2);
+    font-size: 0.8rem;
+    padding: 5px;
+    padding-left: 10px;
+    padding-right: 10px;
+    color: #444;
+    border-radius: 3px;
+    top: 65px;
+    right: 3px;
+    color: grey;
+    text-shadow: white 1px 1px 1px;
+    letter-spacing: 0.1rem;
+}
