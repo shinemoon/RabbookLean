@@ -391,8 +391,8 @@ var rewritePage = function(wctn, startp) {
     $('body').find('a').remove();
     
     //Navigation
-    $('body').append('<div class="pnav" id="pup">pup</div>');
-    $('body').append('<div class="pnav" id="pdown">pdown</div>');
+    $('body').append('<div class="pnav" id="pup"></div>');
+    $('body').append('<div class="pnav" id="pdown"></div>');
     var nv = $("<div id='nav'></div>");
     nv.append("<tr><td><span class='fetchnext' style='cursor:pointer;' href='"+ urlProceed(wctn[3][0].getAttribute('href')) +"'>"+"下一章"+"</span></td></tr>");
     $('body').append(nv);
@@ -417,16 +417,17 @@ var rewritePage = function(wctn, startp) {
 
 
 
-
-	$('#pup').unbind('click').bind('click', function(){
-
-    });
-
-	$('#pdown').unbind('click').bind('click', function(){
-
-    });
-
     $(document).unbind('keyup').bind('keyup', function(e){
+        bindClickPress(e);
+    });
+
+    $(document).unbind('click').bind('click', function(e){
+        bindClickPress(e);
+    });
+
+
+
+    function bindClickPress(e){
         /*
         //Bind the scrollevent
         */
@@ -445,7 +446,19 @@ var rewritePage = function(wctn, startp) {
         });
 
 
-
+        // Page Turn Navigator Click
+        //
+	    $('#pup').unbind('click').bind('click', function(){
+                ascensorInstance.prev();
+        });
+    
+    	$('#pdown').unbind('click').bind('click', function(){
+                if(lastpage)
+                    detectBottom();
+                else
+                    ascensorInstance.next();
+        });
+    
         //;
         // Go to floor
         if(e.keyCode==81){
@@ -482,7 +495,7 @@ var rewritePage = function(wctn, startp) {
             ascensorInstance.prev();
         };
 
-    });
+    };
 
 
 /*

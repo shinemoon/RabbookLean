@@ -25,8 +25,9 @@ html {
    // font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
     font-family: "Kesong";
     height: 30px;
-    background: #f8f8f8!important;
     z-index:998;
+    background:#eeeeee!important;color:#000!important;
+    //background: #f8f8f8!important;
 }
 
 
@@ -77,14 +78,14 @@ html {
 
 
 body {
-    background:transparent;
     height:100%;
     overflow:hidden;
+    margin:-20px!important; background:#eeeeee!important;
+    //background:transparent;
 }
 
 #gnContent  {
     width:100%;
-    background: transparent;
     font-family: "Kesong"!important; 
     font-size:1rem;
     color:#333333;
@@ -92,6 +93,8 @@ body {
     margin-right:auto;
     margin-top:80px;
     line-height:1.7rem;
+    background:#eeeeee!important;
+    //background: transparent;
 }
 
 #lrbk_title {
@@ -107,6 +110,7 @@ body {
 .bb-item{
     overflow:hidden!important;/* 内容超出宽度时隐藏超出部分的内容 */
     white-space:nowrap!important; /* 手动换行 *!important*/
+    color:#000!important;font-size:1.1em!important;
 }
 
 
@@ -158,8 +162,21 @@ body {
 
 #pup{
     left:0px;
+    border-left:3px solid rgba(255,97,0,0);
 }
+
+#pup:hover{
+    border-left:3px solid rgba(255,97,0,0.4);
+}
+
 
 #pdown{
     right:0px;
+    border-right:3px solid rgba(255,97,0,0);
 }
+
+#pdown:hover{
+    border-right:3px solid rgba(255,97,0,0.4);
+}
+
+
