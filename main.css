@@ -1,5 +1,6 @@
 html {
     height:100%;
+    background: #fefefe!important;
 }
 
 
@@ -85,12 +86,12 @@ body {
     width:100%;
     background: transparent;
     font-family: "Kesong"!important; 
-    font-size:1.25rem;
-    color:black;
+    font-size:1rem;
+    color:#333333;
     margin-left:auto;
     margin-right:auto;
     margin-top:80px;
-    line-height:1.5rem;
+    line-height:1.7rem;
 }
 
 #lrbk_title {
@@ -102,17 +103,10 @@ body {
 #nav {
 }
 
-/*
 
 .bb-item{
-    background:#eeeeee;
-    width:100%;
-}
-*/
-
-.bb-item{
- //   background:#eeeeee;
     overflow:hidden!important;/* 内容超出宽度时隐藏超出部分的内容 */
+    white-space:nowrap!important; /* 手动换行 *!important*/
 }
 
 
@@ -155,4 +149,17 @@ body {
     color: grey;
     text-shadow: white 1px 1px 1px;
     letter-spacing: 0.1rem;
+}
+
+.pnav { 
+    width:10%;background:rgba(100,100,100,0);height:100%;position:fixed;top:0px;
+    cursor:pointer;
+}
+
+#pup{
+    left:0px;
+}
+
+#pdown{
+    right:0px;
 }

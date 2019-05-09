@@ -391,6 +391,8 @@ var rewritePage = function(wctn, startp) {
     $('body').find('a').remove();
     
     //Navigation
+    $('body').append('<div class="pnav" id="pup">pup</div>');
+    $('body').append('<div class="pnav" id="pdown">pdown</div>');
     var nv = $("<div id='nav'></div>");
     nv.append("<tr><td><span class='fetchnext' style='cursor:pointer;' href='"+ urlProceed(wctn[3][0].getAttribute('href')) +"'>"+"下一章"+"</span></td></tr>");
     $('body').append(nv);
@@ -416,6 +418,13 @@ var rewritePage = function(wctn, startp) {
 
 
 
+	$('#pup').unbind('click').bind('click', function(){
+
+    });
+
+	$('#pdown').unbind('click').bind('click', function(){
+
+    });
 
     $(document).unbind('keyup').bind('keyup', function(e){
         /*
@@ -578,16 +587,20 @@ var rewritePage = function(wctn, startp) {
     $('#gnContent').hide();
     var linerized = textSplitter(curContent);
     $('#gnContent').html(linerized.join(''));
+
+
+    //$('#gnContent').html('<p>PlaceHolder For Height Calculation </p>');
     //var lheight = parseInt($('p').css('line-height'));
     var lheight = parseInt($('p').outerHeight(true));
     var fwidth = parseInt($('p').css('font-size'));
     console.info("Line Height:" + $('p').outerHeight(true));
 
     //容纳行数
-    var linecnt = parseInt(((wheight-100))/lheight);
+    var linecnt = parseInt((wheight)/lheight)+1;
     //每行字数
     //var chcnt = parseInt((wwidth-80)/fwidth);
-    var chcnt = parseInt((expectwidth-80)/fwidth);
+    var chcnt = parseInt((expectwidth-40)/fwidth);
+
 
     //var pcnt = (linerized.length%linecnt==0)?parseInt(linerized.length/linecnt):parseInt(linerized.length/linecnt)+1;
     //应当以字数来精确计算
@@ -613,10 +626,50 @@ var rewritePage = function(wctn, startp) {
             directionarray.push([i,0]);
         }
         //完全取决于页面行数
-        for(var j=0; j<linecnt; j=j ){
-            pagedinfo.find('.bb-item').last().append(linerized[lineptr]);
-            j=j+((linerized[lineptr].length/chcnt)<=1?1:parseInt(linerized[lineptr].length/chcnt)+1);
-            if(++lineptr==linerized.length) {
+        // 发现Bug： 如果单行的字数太多直接超过了页面，将会溢出。必须要做切割。;
+        // Attempt 1: Maybe I need to split the content before hands? i.e. split the whole page into chncnt size lines?
+        //  => Failed some how, hard to judge exactly place where the page force one auto-break
+        // Attempt 2: Maybe I can manually to force the new line...go
+        // So before below For loop, I must break all <p> item with <br> correctly!
+        //
+        var newlines=[];
+        $.each(linerized, function(index, value){
+            //Force br newline
+            //
+            console.log(value);
+            var s = $(value).text();
+            var reg= RegExp(".{"+chcnt+"}", "g");
+            var rs=s.match(reg);
+            var lastseg = s.length%chcnt;
+//            rs.push(s.substring(rs.join('').length));
+            if(rs!=null) {
+//                rs[0]= "<p>"+rs[0];
+                if(lastseg==0){
+                        rs[rs.length-1]= rs[rs.length-1]+"<br>";
+                        rs.splice(rs.length-1,0,"<br>");//New Line as end of p
+                    }
+                else 
+                    rs[rs.length-1]= rs[rs.length-1]+"<br>";
+                $.each(rs,function(i,v){
+                    if(i!=rs.length-1) {
+                        rs[i]=rs[i]+"<br>";
+                    }
+                });
+                newlines = newlines.concat(rs);
+            } 
+            if(lastseg!=0) {
+                newlines = newlines.concat(s.slice(s.length-lastseg, s.length)+"<br>");
+                newlines = newlines.concat("<br>");
+            }
+        });
+
+        console.log(newlines);
+
+        for(var j=0; j<linecnt; j++ ){
+            console.log('==='+newlines.length+"==="+linecnt+"===");
+            //var j = j+((newlines[lineptr].length/chcnt)<=1?1:parseInt(newlines[lineptr].length/chcnt)+1);
+            pagedinfo.find('.bb-item').last().append(newlines[lineptr]);
+            if(lineptr++==newlines.length) {
                 inPaging=false;
                 break;
             }
@@ -638,7 +691,7 @@ var rewritePage = function(wctn, startp) {
     //var ascensor = $('#gnContent').ascensor();
     //var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height:'100%',wheelNavigation:true, direction:directionarray});
     //var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height: wheight+"px", swipeNavigation:true, wheelNavigation:true, direction:directionarray});
-    var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height:'100%',wheelNavigation:false, swipeNavigation:false, direction:directionarray});
+    var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height:'100%',wheelNavigation:false, direction:directionarray});
     ascensorInstance = ascensor.data('ascensor');   // Access instance
 
     $('#currentindex').text('1');
