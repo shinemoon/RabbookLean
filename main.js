@@ -606,7 +606,7 @@ var rewritePage = function(wctn, startp) {
     //var lheight = parseInt($('p').css('line-height'));
     var lheight = parseInt($('p').outerHeight(true));
     var fwidth = parseInt($('p').css('font-size'));
-    console.info("Line Height:" + $('p').outerHeight(true));
+    //console.info("Line Height:" + $('p').outerHeight(true));
 
     //容纳行数
     var linecnt = parseInt((wheight)/lheight)+1;
@@ -649,7 +649,6 @@ var rewritePage = function(wctn, startp) {
         $.each(linerized, function(index, value){
             //Force br newline
             //
-            console.log(value);
             var s = $(value).text();
             var reg= RegExp(".{"+chcnt+"}", "g");
             var rs=s.match(reg);
@@ -676,10 +675,8 @@ var rewritePage = function(wctn, startp) {
             }
         });
 
-        console.log(newlines);
 
         for(var j=0; j<linecnt; j++ ){
-            console.log('==='+newlines.length+"==="+linecnt+"===");
             //var j = j+((newlines[lineptr].length/chcnt)<=1?1:parseInt(newlines[lineptr].length/chcnt)+1);
             pagedinfo.find('.bb-item').last().append(newlines[lineptr]);
             if(lineptr++==newlines.length) {
@@ -938,9 +935,7 @@ var nextractContent = function(ctn) {
 }
 
 var detectBottom = function(e){
-            console.info("Detect Bottom");
             toBottom = document.body.clientHeight - 140 - ($('body').height() - $('body').scrollTop());
-            console.log(toBottom + "-" + toBottom_d);
             if(Math.abs(toBottom - toBottom_d) < 1){
                 reachBottom = true;
             } else {

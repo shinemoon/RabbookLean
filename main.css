@@ -1,6 +1,7 @@
 html {
     height:100%;
-    background: #fefefe!important;
+    //background: #fefefe!important;
+    background: #ffffff!important;
 }
 
 
@@ -26,8 +27,8 @@ html {
     font-family: "Kesong";
     height: 30px;
     z-index:998;
-    background:#eeeeee!important;color:#000!important;
-    //background: #f8f8f8!important;
+    //background:#eeeeee!important;color:#000!important;
+    background:#ffffff!important;color:#000!important;
 }
 
 
@@ -80,7 +81,7 @@ html {
 body {
     height:100%;
     overflow:hidden;
-    margin:-20px!important; background:#eeeeee!important;
+    margin:-20px!important; background:#ffffff!important;
     //background:transparent;
 }
 
@@ -93,7 +94,7 @@ body {
     margin-right:auto;
     margin-top:80px;
     line-height:1.7rem;
-    background:#eeeeee!important;
+    background:#ffffff!important;
     //background: transparent;
 }
 
@@ -110,7 +111,7 @@ body {
 .bb-item{
     overflow:hidden!important;/* 内容超出宽度时隐藏超出部分的内容 */
     white-space:nowrap!important; /* 手动换行 *!important*/
-    color:#000!important;font-size:1.1em!important;
+    color:#555!important;font-size:1.2em!important;
 }
 
 
