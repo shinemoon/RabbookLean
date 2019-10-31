@@ -1,6 +1,6 @@
 ﻿{
 	"name": "LeanRabbook",
-	"version": "1.63",
+	"version": "1.65",
 	"description": "Auto Parser of Novel",
     "short_name": "LRabook",
 	"background":{
@@ -23,6 +23,6 @@
   	"permissions": [
         "tabs",
 		"storage",
-        "<all_urls>"
+        "activeTab"
 	]
 }

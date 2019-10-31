@@ -365,6 +365,7 @@ var handleContent = function(bodytxt){
 };
 
 var rewritePage = function(wctn, startp) {
+
     if(rjs!=null && rjs != ""){
         eval(rjs);
     }

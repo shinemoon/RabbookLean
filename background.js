@@ -21,7 +21,10 @@ chrome.storage.local.get({'bookmarks':[]}, function (result) {
 
 
 $( document ).ready(function(){
-    chrome.tabs.onUpdated.addListener(function(tid, cinfo, ctab) {
+    /*
+    //-> Because of new security policy in google chrome app store, <all_url> is very hard to pass the review, so the automatical load from bookmark page is not doable
+    // Then, you need click the button after redirecting to the page
+
         //Check if it's current tab 
         if(curpage ==  ctab['url']) {
             curpage = null;
@@ -54,6 +57,7 @@ $( document ).ready(function(){
             });
         }
    });
+   */
 });
 
 chrome.runtime.onConnect.addListener(function(port){
