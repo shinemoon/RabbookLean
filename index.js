@@ -1,47 +1,57 @@
 var cururl = null;
-var root = null;
+var css = null;
 
-chrome.runtime.getBackgroundPage(function(pg){
-    //Don't do callback for below part, as I am lazy... should be safe enough
-    root = pg;
-});
-
-$( document ).ready(function(){
-    $('#readpage').click(function(){
+$(document).ready(function () {
+    $('#readpage').click(function () {
         readPage();
     });
-    $('#bookmarktree').click(function(){
-        chrome.tabs.create({url:"details.html"});
+    $('#bookmarktree').click(function () {
+        chrome.tabs.create({ url: "details.html" });
     });
 
 });
 
-function readPage(){
-    var curtab = null;
-    chrome.tabs.query({active:true},function(tab){
-        curtab = tab[0];
+function readPage() {
+    var curtab=null;
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        curtab = tabs[0];
         console.log(curtab);
-        root.rTitle = curtab.title;
-        delayStop(function(){
-            chrome.tabs.insertCSS(tab[0].id, {file:"main.css"}, function(){});
-            if(root.css==null || root.css==""){
+        const rTitle = curtab.title;
+
+        delayStop(function () {
+            // 插入 CSS 文件
+            chrome.scripting.insertCSS({
+                target: { tabId: curtab.id },
+                files: ["main.css"]
+            });
+
+            // 如果 css 变量有值，插入 CSS 代码
+            if (css == null || css == "") {
                 console.log('no css');
             } else {
-                chrome.tabs.insertCSS(tab[0].id, {code:root.css}, function(){});
+                chrome.scripting.insertCSS({
+                    target: { tabId: curtab.id },
+                    css: css
+                });
             }
 
-            chrome.tabs.executeScript(tab[0].id,  {file:"main.js"}, function(){});
+            // 执行 JavaScript 文件
+            chrome.scripting.executeScript({
+                target: { tabId: curtab.id },
+                files: ["main.js"]
+            });
 
+            // 关闭窗口
             window.close();
         });
     });
 
-    function delayStop(func){
-        chrome.tabs.get(curtab.id, function(tb){
-            if(tb.status!="complete") {
-                chrome.tabs.executeScript(tb.id, {code:"window.stop();"},function(){});
+    function delayStop(func) {
+        chrome.tabs.get(curtab.id, function (tb) {
+            if (tb.status != "complete") {
+                chrome.tabs.executeScript(tb.id, { code: "window.stop();" }, function () { });
                 $('#readpage').html("Waiting");
-                setTimeout(function(){
+                setTimeout(function () {
                     delayStop(func);
                 }, 1000);
             } else {

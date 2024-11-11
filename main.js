@@ -232,7 +232,7 @@ textSplitter = function(txt) {
 
 
 var targets = null;
-var port = chrome.extension.connect({name: "contpage"});
+var port = chrome.runtime.connect({name: "contpage"});
 var cururl = window.location.href;
 var progress = 0; //the reading progress in one chapter
 var rTitle = null;
@@ -372,7 +372,7 @@ var rewritePage = function(wctn, startp) {
     $('body').empty();
 //    $('body').attr('style','');
     $('body').attr('style','');
-    var fontpath = chrome.extension.getURL('/font');
+    var fontpath = chrome.runtime.getURL('/font');
     var fontstr =  "@font-face {font-family: 'Kesong';src: url('"+ fontpath +"/font.ttf') format('truetype');}";
     $('body').append('<style>'+fontstr+'</style>');
 
