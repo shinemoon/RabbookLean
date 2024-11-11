@@ -322,11 +322,6 @@ var handleContent = function(bodytxt){
 			dummy.find('link').remove();
 			dummy.find('ins').remove();
 	
-			//Remove items
-//			dummy.find('table').remove();
-//			dummy.find('tr').remove();
-//			dummy.find('td').remove();
-			//dummy.find('br').remove();
             $('table').filter(function(index){
                 if($(this).text().match('.*[下|后]\s*一*\s*[章|回|页|节].*')) {
                     return false;
@@ -499,17 +494,6 @@ var rewritePage = function(wctn, startp) {
     };
 
 
-/*
-    $(document).unbind('mousewheel').bind('mousewheel', function(e){
-            toBottom = document.body.clientHeight - 140 - ($('body').height() - $('body').scrollTop());
-            if(Math.abs(toBottom - toBottom_d) < 1){
-                reachBottom = true;
-            } else {
-                reachBottom = false;
-                toBottom_d = toBottom;
-            }
-    });
-*/
     $(document).unbind('mousewheel').bind('mousewheel', function(e){
         if(notinpaging==false)
             return 0;
@@ -700,8 +684,6 @@ var rewritePage = function(wctn, startp) {
     $('#gnContent').attr('pages', pages);
 
     //var ascensor = $('#gnContent').ascensor();
-    //var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height:'100%',wheelNavigation:true, direction:directionarray});
-    //var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height: wheight+"px", swipeNavigation:true, wheelNavigation:true, direction:directionarray});
     var ascensor = $('#gnContent').ascensor({time:200, easing: 'easeInOutCirc',height:'100%',wheelNavigation:false, direction:directionarray});
     ascensorInstance = ascensor.data('ascensor');   // Access instance
 
@@ -922,13 +904,6 @@ var nextractContent = function(ctn) {
 
 
  
- /* Debug Purpose
-   cTitle.css('background', 'red'); 
-   cNavPrev.css('background', 'yellow'); 
-   cNavNext.css('background', 'blue'); 
-   cNavIndex.css('background', 'grey'); 
-*/
-
     
     retarr[4] = rtContent;
     return retarr;
