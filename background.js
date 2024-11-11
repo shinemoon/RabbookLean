@@ -8,8 +8,9 @@ chrome.runtime.onConnect.addListener(function (port) {
     if (port.name == 'contpage') {
         chrome.storage.local.get({ "clist": [], "flist": [], "nlist": [], "tlist": [], "dir": false, "css": null, "js": null }, function (r) {
             port.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "nlist": r.nlist, "dir": r.dir, "tlist": r.tlist, "css": r.css, "js": r.js });
+            // 发送完配置后，理论上就Go了
             // TODO: Progress passing
-            //            indport.postMessage({ "type": "go", "progress": curprog }); 
+            port.postMessage({ "type": "go", "progress": null });
         });
         // 监听从这个 port 收到的消息
         //  用来更新书签
@@ -57,15 +58,16 @@ function updateBookmarks(msg) {
         }
     };
 
-    // Update bookmark
-    for (var i = 0; i < bklist.length; i++) {
-        if (sameNovel(bklist[i].cururl, cururl)) {
-            bklist = bklist.slice(0, i).concat(bklist.slice(i + 1, bklist.length));
-            break;
-        }
-    };
+
     chrome.storage.local.get({ 'bookmarks': [] }, function (result) {
         bklist = result.bookmarks;
+        // Update bookmark
+        for (var i = 0; i < bklist.length; i++) {
+            if (sameNovel(bklist[i].cururl, cururl)) {
+                bklist = bklist.slice(0, i).concat(bklist.slice(i + 1, bklist.length));
+                break;
+            }
+        };
         bklist.push({ rTitle: rTitle, cururl: cururl, curprog: curprog });
         chrome.storage.local.set({ 'bookmarks': bklist }, function () {
             console.info("Bookmarks Updated Done");

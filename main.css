@@ -1,183 +1,154 @@
 html {
-    height:100%;
-    //background: #fefefe!important;
-    background: #ffffff!important;
+  height: 100%;
+  background: #ffffff !important;
 }
-
-
-#lrbk_title {
-    cursor:pointer;
-    word-break:keep-all;/* 不换行 */
-    white-space:nowrap;/* 不换行 */
-    overflow:hidden;/* 内容超出宽度时隐藏超出部分的内容 */
-    text-overflow:ellipsis;/* 当对象内文本溢出时显示省略标记(...) ；需与overflow:hidden;一起使用。*/
-    position:fixed!important;
-    left:0px;
-    margin-top:0px!important;
-    margin-bottom:10px!important;
-    padding-left:30px!important;
-    padding-right:30px!important;
-    top:-10px!important;
-    opacity:1!important;
-    padding-top: 30px!important;
-    padding-bottom: 10px!important;
-    width:110%;
-    box-shadow:rgba(0,0,0,0.1) -3px 3px 4px ;
-   // font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
-    font-family: "Kesong";
-    height: 30px;
-    z-index:998;
-    //background:#eeeeee!important;color:#000!important;
-    background:#ffffff!important;color:#000!important;
-}
-
-
-#lrbk_title h1 , #lrbk_title h2 ,#lrbk_title h3 ,#lrbk_title h4  {
-    font-size:24px!important;
-    font-weight:normal!important;
-    font-style:normal!important;
-    //color: #eca88c!important;
-    color: #222222!important;
-}
-
-#gnContent *{
-}
-
-
-
-#nav {
-    position:fixed!important;
-    right:0px;
-    bottom:0px;
-    color: #fff!important;
-    //font-family: Baskerville, "Times New Roman", "Liberation Serif", STFangsong, FangSong, FangSong_GB2312, "CWTEX\-F", serif;
-    font-family: "Kesong";
-}
-
-#nav a:hover, #nav span:hover{
-    cursor:pointer;
-    border-left:2px solid lightgreen;
-}
-
-#nav td{
-    height:35px;
-}
-
-#nav a, #nav span{
-    text-decoration: none;
-    margin-bottom:20px;
-    color:#333;
-    background:#fff;
-    padding-right: 20px;
-    padding-left: 15px;
-    padding-top: 5px;
-    padding-bottom: 5px;
-    border-left:2px solid green;
-    text-align:right;
-    width:120px;
-}
-
 
 body {
-    height:100%;
-    overflow:hidden;
-    margin:-20px!important; background:#ffffff!important;
-    //background:transparent;
+  height: 100%;
+  overflow: hidden;
+  margin: -20px !important;
+  background: #ffffff !important;
 }
 
-#gnContent  {
-    width:100%;
-    font-family: "Kesong"!important; 
-    font-size:1rem;
-    color:#333333;
-    margin-left:auto;
-    margin-right:auto;
-    margin-top:80px;
-    line-height:1.7rem;
-    background:#ffffff!important;
-    //background: transparent;
+#gnContent {
+  width: 100%;
+  font-family: "Kesong" !important;
+  font-size: 1rem;
+  color: #333333;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 80px;
+  line-height: 1.7rem;
+  background: #ffffff !important;
 }
 
 #lrbk_title {
-    position:fixed;
-    left:0px;
-    top:20px;
+  cursor: pointer;
+  word-break: keep-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: fixed !important;
+  left: 0;
+  margin-top: 0 !important;
+  margin-bottom: 10px !important;
+  padding-left: 30px !important;
+  padding-right: 30px !important;
+  top: -10px !important;
+  opacity: 1 !important;
+  padding-top: 30px !important;
+  padding-bottom: 10px !important;
+  width: 110%;
+  box-shadow: rgba(0, 0, 0, 0.1) -3px 3px 4px;
+  font-family: "Kesong";
+  height: 30px;
+  z-index: 998;
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+#lrbk_title h1, #lrbk_title h2, #lrbk_title h3, #lrbk_title h4 {
+  font-size: 24px !important;
+  font-weight: normal !important;
+  font-style: normal !important;
+  color: #222222 !important;
 }
 
 #nav {
+  position: fixed !important;
+  right: 0;
+  bottom: 0;
+  color: #ffffff !important;
+  font-family: "Kesong";
+}
+#nav a:hover, #nav span:hover {
+  cursor: pointer;
+  border-left: 2px solid lightgreen;
+}
+#nav td {
+  height: 35px;
+}
+#nav a, #nav span {
+  text-decoration: none;
+  margin-bottom: 20px;
+  color: #333333;
+  background: #ffffff;
+  padding-right: 20px;
+  padding-left: 15px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-left: 2px solid green;
+  text-align: right;
+  width: 120px;
 }
 
-
-.bb-item{
-    overflow:hidden!important;/* 内容超出宽度时隐藏超出部分的内容 */
-    white-space:nowrap!important; /* 手动换行 *!important*/
-    color:#555!important;font-size:1.2em!important;
+.bb-item {
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  color: #555 !important;
+  font-size: 1.2em !important;
 }
-
 
 .container,
 .bb-custom-wrapper,
 .bb-bookblock {
-	width: 100%;
-	height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .container {
-	position: relative;
-	left: 0px;
-	transition: left 0.3s ease-in-out;
+  position: relative;
+  left: 0;
+  transition: left 0.3s ease-in-out;
 }
 
 #indexinfo {
-    position:fixed;
-    right:20px;
-    top:30px;
-    font-size: 12px;
-    color: #AAA;
-    opacity: 0.4;
-    //font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, DFKai-SB, "TW\-Kai", serif;
-    font-family: "Kesong";
-    z-index:999;
+  position: fixed;
+  right: 20px;
+  top: 30px;
+  font-size: 12px;
+  color: #AAA;
+  opacity: 0.4;
+  font-family: "Kesong";
+  z-index: 999;
 }
 
 #hint {
-    position:fixed;
-    background:rgba(0,200,0,0.2);
-    font-size: 0.8rem;
-    padding: 5px;
-    padding-left: 10px;
-    padding-right: 10px;
-    color: #444;
-    border-radius: 3px;
-    top: 65px;
-    right: 3px;
-    color: grey;
-    text-shadow: white 1px 1px 1px;
-    letter-spacing: 0.1rem;
+  position: fixed;
+  background: rgba(0, 200, 0, 0.2);
+  font-size: 0.8rem;
+  padding: 5px 10px;
+  color: grey;
+  border-radius: 3px;
+  top: 65px;
+  right: 3px;
+  color: grey;
+  text-shadow: white 1px 1px 1px;
+  letter-spacing: 0.1rem;
 }
 
-.pnav { 
-    width:10%;background:rgba(100,100,100,0);height:100%;position:fixed;top:0px;
-    cursor:pointer;
+.pnav {
+  width: 10%;
+  background: rgba(100, 100, 100, 0);
+  height: 100%;
+  position: fixed;
+  top: 0;
+  cursor: pointer;
 }
 
-#pup{
-    left:0px;
-    border-left:3px solid rgba(255,97,0,0);
+#pup {
+  left: 0;
+  border-left: 3px solid rgba(255, 97, 0, 0);
 }
 
-#pup:hover{
-    border-left:3px solid rgba(255,97,0,0.4);
+#pup:hover {
+  border-left: 3px solid rgba(255, 97, 0, 0.4);
 }
 
-
-#pdown{
-    right:0px;
-    border-right:3px solid rgba(255,97,0,0);
+#pdown {
+  right: 0;
+  border-right: 3px solid rgba(255, 97, 0, 0);
 }
 
-#pdown:hover{
-    border-right:3px solid rgba(255,97,0,0.4);
-}
-
-
+#pdown:hover {
+  border-right: 3px solid rgba(255, 97, 0, 0.4);
+}/*# sourceMappingURL=main.css.map */
