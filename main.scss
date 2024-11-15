@@ -21,12 +21,13 @@ html {
 body {
     height: 100%;
     overflow: hidden;
-    margin: -20px !important;
+    //margin: -20px !important;
     background: $white !important;
 }
 
 #gnContent {
     width: 100%; 
+    height: calc(100% - 180px)!important; 
     font-family: "Kesong" !important;
     font-size: 0.9rem;
     color: $dark-grey;

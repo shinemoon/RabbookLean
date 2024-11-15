@@ -256,7 +256,7 @@ function rewritePage(wctn, startp) {
     // 需要预先算出究竟要分几页，每页分到几个<p>!
 
     // 要用字数优先！
-    var linecnt = parseInt((wheight) / lheight) + 1;
+    var linecnt = parseInt((wheight) / lheight) - 8;
 
 
 
@@ -274,8 +274,6 @@ function rewritePage(wctn, startp) {
         pages++;
         pagedinfo.append($("<div class='bb-item' index=" + i + "></div>"));
         // Set padding
-
-
         if (i % 2 == 0) pagedinfo.find('.bb-item').last().addClass('odd-page');
         /* Define the direction */
         /* Claud */
