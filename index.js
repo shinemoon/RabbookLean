@@ -38,7 +38,7 @@ function readPage() {
             // 执行 JavaScript 文件
             chrome.scripting.executeScript({
                 target: { tabId: curtab.id },
-                files: ["main.js"]
+                files: ["pre-main.js","html-handling.js","pageRewrite.js","main.js"]
             });
 
             // 关闭窗口

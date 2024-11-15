@@ -13,12 +13,12 @@ body {
 #gnContent {
   width: 100%;
   font-family: "Kesong" !important;
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: #333333;
   margin-left: auto;
   margin-right: auto;
   margin-top: 80px;
-  line-height: 1.7rem;
+  line-height: 1.2rem;
   background: #ffffff !important;
 }
 

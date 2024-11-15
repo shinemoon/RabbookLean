@@ -1,188 +1,210 @@
 var cururl = null;
 
-var root = null;
+var targets = null;
+var port = chrome.runtime.connect({ name: "detailspage" });
+var progress = 0; //the reading progress in one chapter
+var rTitle = null;
+var flist = [];
+var clist = [];
+var tlist = [];
+var nlist = [];
+var dir = true;
+var rjs = null;
+var lastY = 0;
+var sumDelta = 0;
+var scrollCnt = 0;
 
-$( document ).ready(function(){
-    chrome.runtime.getBackgroundPage(function(pg){
-        //Don't do callback for below part, as I am lazy... should be safe enough
-        root = pg;
+var bklist = [];
 
-        chrome.storage.local.get({'clist':[],  'flist':[], 'tlist':[], 'nlist':[], 'dir':false, 'css':null, 'js':null}, function (result) {
-            root.clist=result.clist;
-            root.tlist=result.tlist;
-            root.nlist=result.nlist;
-            root.flist=result.flist;
-            root.css=result.css;
-            root.js=result.js;
-            root.dir=result.dir;
-            $('#text-selector').val(JSON.stringify(root.clist));
-            $('#text-filter').val(JSON.stringify(root.flist));
-            $('#reader-dir').prop("checked",root.dir);
-            $('#title-selector').val(JSON.stringify(root.tlist));
-            $('#nav-selector').val(JSON.stringify(root.nlist));
-            $('#cssinput').val(root.css);
-            $('#jsinput').val(root.js);
+
+
+$(document).ready(function () {
+    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [] }, function (result) {
+        clist = result.clist;
+        tlist = result.tlist;
+        nlist = result.nlist;
+        flist = result.flist;
+        css = result.css;
+        rjs = result.js;
+        dir = result.dir;
+        bklist = result.bookmarks;
+        $('#text-selector').val(JSON.stringify(clist));
+        $('#text-filter').val(JSON.stringify(flist));
+        $('#reader-dir').prop("checked", dir);
+        $('#title-selector').val(JSON.stringify(tlist));
+        $('#nav-selector').val(JSON.stringify(nlist));
+        $('#cssinput').val(css);
+        $('#jsinput').val(rjs);
+
+
+        // Load show
+        displayPage();
+    });
+
+
+    // Main function (Should be used recursively)
+
+    port.onMessage.addListener(function (msg) {
+        //Log Print
+        if (msg.type == 'cfg') {
+            flist = msg.flist;
+            clist = msg.clist;
+            tlist = msg.tlist;
+            nlist = msg.nlist;
+            dir = msg.dir;
+            rjs = msg.js;
+        };
+        if (msg.type == "go") {
+            if (msg.progress != null) {
+                progress = msg.progress;
+                handlePage(progress);
+            } else {
+                handlePage(0);
+            }
+        };
+    });
+});
+
+
+
+
+function displayPage() {
+    //Refresh the bookmark
+    //Insert current bkmarks
+
+    //Display the bkmarks
+    if (rTitle != null) {
+    }
+
+    //Show:
+
+    for (var i = 0; i < bklist.length; i++) {
+        var cstr = "<li><span class='spanbut del'>删</span><span class='linka' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + "</span></li>";
+        $('#bkmarks .bookmarks ul').append(cstr);
+    }
+
+    $('.del.spanbut').click(function () {
+        var ind = $(this).parent().find('.linka').eq(0).attr('ind');
+        var tmplist = bklist.slice(0, Number(ind));
+        tmplist = tmplist.concat(bklist.slice(Number(ind) + 1, bklist.length));
+        bklist = tmplist;
+        chrome.storage.local.set({ 'bookmarks': bklist }, function () {
+            console.info("Bookmarks Updated Done");
+            window.location.reload();
         });
+    });
 
-        //Refresh the bookmark
-        //Insert current bkmarks
-    
-        //Display the bkmarks
-        if(root.rTitle!=null) {
-            // 1. to insert now
-            //root.bklist.push({rTitle:root.rTitle, cururl:root.cururl});
-            // 2. Or,to insert later
-            //var cstr = "<li><a href='"+root.cururl+"'>"+root.rTitle+"</a><span class='spanbut pin'>顶</span> <span class='spanbut del'>删</span></li>";
-            //$('#bkmarks .bookmarks ul').append(cstr);
-            // 3. Or, don't do any thing
-        }
 
-        //Show:
-    
-        for(var i = 0; i< root.bklist.length; i++){
-            var cstr = "<li><span class='spanbut del'>删</span><span class='linka' ind='"+i+"' progress='"+root.bklist[i].curprog+"' href='"+root.bklist[i].cururl+"'>"+root.bklist[i].rTitle+"</span></li>";
-            $('#bkmarks .bookmarks ul').append(cstr);
-        }
 
-        $('.del.spanbut').click(function(){
-            var ind = $(this).parent().find('.linka').eq(0).attr('ind');
-            var tmplist = root.bklist.slice(0, Number(ind));
-            tmplist = tmplist.concat(root.bklist.slice(Number(ind)+1, root.bklist.length));
-            root.bklist = tmplist;
-            chrome.storage.local.set({'bookmarks':root.bklist}, function () {
-                console.info("Bookmarks Updated Done");
-                window.location.reload(); 
-            });
+    $('.linka').click(function () {
+        var ind = $(this).attr('ind');
+        console.log($(this).attr('ind'));
+        chrome.storage.local.set({ 'bookmarks': bklist }, function () {
+            console.info("Bookmarks Updated Done");
         });
-
-
-
-        $('.linka').click(function(){
-            var ind = $(this).attr('ind');
-            console.log($(this).attr('ind')); 
-//            var tmplist = root.bklist.slice(0, Number(ind));
-//            tmplist = tmplist.concat(root.bklist.slice(Number(ind)+1, root.bklist.length));
-//            root.bklist = tmplist;
-            chrome.storage.local.set({'bookmarks':root.bklist}, function () {
-                console.info("Bookmarks Updated Done");
-            });
-            //Open and injection
-            root.curpage = $(this).attr('href');
-            root.curprog = $(this).attr('progress');
-            window.location = $(this).attr('href'); 
-        });
+        //Open and injection
+        window.location = $(this).attr('href');
     });
 
     $('.hidetgt').hide();
     $('.hidetgt.bookmarks').show();
-    $('.save').click(function(){
+    $('.save').click(function () {
         var sok = true;
         var ttxt = $("#title-selector").val();
-        if(ttxt!="") {
-            try{
-                var cps = JSON.parse(ttxt);    
-                if(Object.prototype.toString.call(cps)=== '[object Array]'){
-                   root.tlist = cps; 
+        if (ttxt != "") {
+            try {
+                var cps = JSON.parse(ttxt);
+                if (Object.prototype.toString.call(cps) === '[object Array]') {
+                    tlist = cps;
                 }
-            } catch(err) {
+            } catch (err) {
                 sok = false;
             };
         }
         var ntxt = $("#nav-selector").val();
-        if(ntxt!="") {
-            try{
-                var cps = JSON.parse(ntxt);    
-                if(Object.prototype.toString.call(cps)=== '[object Array]'){
-                   root.nlist = cps; 
+        if (ntxt != "") {
+            try {
+                var cps = JSON.parse(ntxt);
+                if (Object.prototype.toString.call(cps) === '[object Array]') {
+                    nlist = cps;
                 }
-            } catch(err) {
+            } catch (err) {
                 sok = false;
             };
         }
 
         var ftxt = $("#text-filter").val();
-        if(ftxt!="") {
-            try{
-                var fps = JSON.parse(ftxt);    
+        if (ftxt != "") {
+            try {
+                var fps = JSON.parse(ftxt);
                 console.log(fps);
-                if(Object.prototype.toString.call(fps)=== '[object Array]'){
-                   root.flist = fps; 
+                if (Object.prototype.toString.call(fps) === '[object Array]') {
+                    flist = fps;
                 }
-            } catch(err) {
+            } catch (err) {
                 sok = false;
             };
         }
 
         var dir = $("#reader-dir").prop("checked");
-        try{
-            root.dir= dir; 
-        } catch(err) {
+        try {
+            dir = dir;
+        } catch (err) {
             sok = false;
         };
 
         var ctxt = $("#text-selector").val();
-        if(ctxt!="") {
-            try{
-                var cps = JSON.parse(ctxt);    
+        if (ctxt != "") {
+            try {
+                var cps = JSON.parse(ctxt);
                 console.log(cps);
-                if(Object.prototype.toString.call(cps)=== '[object Array]'){
-                   root.clist = cps; 
+                if (Object.prototype.toString.call(cps) === '[object Array]') {
+                    clist = cps;
                 }
-            } catch(err) {
+            } catch (err) {
                 sok = false;
             };
         }
 
-        if(sok){
-            chrome.storage.local.set({"clist":root.clist,"flist":root.flist, "nlist":root.nlist,"tlist":root.tlist, "dir":root.dir},function(){
+        if (sok) {
+            chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir }, function () {
                 alert("设置完成");
-                window.location.reload(); 
+                window.location.reload();
             });
         } else {
-                alert("配置无效，请检查格式。");
+            alert("配置无效，请检查格式。");
         }
     });
 
-    $('.reset').click(function(){
-        root.clist = [];
-        root.flist = []; 
-        root.dir= false; 
-        chrome.storage.local.set({"clist":root.clist,"flist":root.flist, "nlist":root.nlist,"tlist":root.tlist, "dir":root.dir},function(){});
+    $('.reset').click(function () {
+        clist = [];
+        flist = [];
+        dir = false;
+        chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir }, function () { });
         alert("重置完成");
-        window.location.reload(); 
+        window.location.reload();
     });
 
-    //Load the config
-    chrome.storage.local.get({"clist":[], "flist":[], "nlist":[], "tlist":[], "dir":false },function(r){
-        root.clist = r.clist;
-        root.tlist = r.tlist;
-        root.nlist = r.nlist;
-        root.flist = r.flist;
-        root.dir= r.dir;
-        //Refresh input field
-    });
-
-
-    $('.csssave').click(function(){
-        root.css = $('#cssinput').val();
-        chrome.storage.local.set({"css":root.css},function(){
+    $('.csssave').click(function () {
+        css = $('#cssinput').val();
+        chrome.storage.local.set({ "css": css }, function () {
             alert("样式保存完毕");
-            window.location.reload(); 
+            window.location.reload();
         });
     });
-    $('.cssclean').click(function(){
+    $('.cssclean').click(function () {
         $('#cssinput').val("");
         $('.csssave').click();
     });
 
-    $('.jssave').click(function(){
-        root.js= $('#jsinput').val();
-        chrome.storage.local.set({"js":root.js},function(){
+    $('.jssave').click(function () {
+        rjs = $('#jsinput').val();
+        chrome.storage.local.set({ "js": rjs }, function () {
             alert("脚本保存完毕");
-            window.location.reload(); 
+            window.location.reload();
         });
     });
-    $('.jsclean').click(function(){
+    $('.jsclean').click(function () {
         $('#jsinput').val("");
         $('.jssave').click();
     });
@@ -198,26 +220,19 @@ $( document ).ready(function(){
     var cssplc = "留空使用系统内置主题,当有内容时，将会用此内容覆盖。\n\n涉及关键字：#gnContent（正文）， #lrbk_title（标题，根据原始页面的标记可能有h1-h4等各级），#nav （翻页按钮）\n\n 需要更多信息，请通过检视页面来获取。"
     $('#cssinput').attr('placeholder', cssplc);
 
-
-
-
-
-});
-
-
-$('.topline').click(function(){
-    console.log($(this).attr('toggle_target'));
-    if($(this).hasClass('hide')) {
-        $('.topline').addClass('hide');
-        $(this).removeClass('hide');
-        //Hide sub
-        $('.hidetgt').hide();
-        $("."+$(this).attr('toggle_target')).show();
-    } else {
-//        $('.topline').removeClass('hide');
- //       $(this).addClass('hide');
-  //      $("."+$(this).attr('toggle_target')).hide();
-    }
-});
-
+    $('.topline').click(function () {
+        console.log($(this).attr('toggle_target'));
+        if ($(this).hasClass('hide')) {
+            $('.topline').addClass('hide');
+            $(this).removeClass('hide');
+            //Hide sub
+            $('.hidetgt').hide();
+            $("." + $(this).attr('toggle_target')).show();
+        } else {
+            //        $('.topline').removeClass('hide');
+            //       $(this).addClass('hide');
+            //      $("."+$(this).attr('toggle_target')).hide();
+        }
+    });
+}; // End of displayPage
 
