@@ -223,7 +223,7 @@ function rewritePage(wctn, startp) {
 
     // Refine the text
     var wwidth = $(window).width();
-    var wheight = $(window).height();
+    var wheight = $(window).height() - 120;
 
     var expectwidth = 960; // Default central colume = 960px;
     // Calculate the padding ;
@@ -256,15 +256,35 @@ function rewritePage(wctn, startp) {
     // 需要预先算出究竟要分几页，每页分到几个<p>!
 
     // 要用字数优先！
-    var linecnt = parseInt((wheight) / lheight) - 8;
-
-
-
+    var linecnt = parseInt((wheight) / lheight) - parseInt((80) / lheight);
 
 
     //应当以字数来精确计算
     var pagedinfo = $("<div></div>");
     var directionarray = [];
+
+    // 重新生成以及打断字符段落
+    // 定义存储结果的新数组
+    var sortedlines = [];
+
+    // 遍历每一段内容
+    newlines.forEach(line => {
+        // 移除段落标签，提取纯文本
+        var text = line.replace(/<p[^>]*>|<\/p>/g, "");
+        // 分段
+        while (text.length > 0) {
+            // 提取当前段落的一部分，不超过chcnt
+            var part = text.substring(0, chcnt);
+            // 将当前部分重新包装成段落并推入新数组
+            sortedlines.push(`<p class='fake-p'>${part}</p>`);
+            // 移除已处理的部分
+            text = text.substring(chcnt);
+        }
+        // 在每个原始的段落后面插入一个空段落 (暂时不做，太空了)
+        //sortedlines.push("<p class='true-p'>&nbsp</p>");
+    });
+
+    //接下来是把sortedllines分成N页，每页linecnt行
 
     //计算页数
     var inPaging = true;
@@ -283,8 +303,8 @@ function rewritePage(wctn, startp) {
             directionarray.push([i, 0]);
         }
         for (var j = 0; j < linecnt; j++) {
-            pagedinfo.find('.bb-item').last().append(newlines[lineptr]);
-            if (lineptr++ == newlines.length) {
+            pagedinfo.find('.bb-item').last().append(sortedlines[lineptr]);
+            if (lineptr++ == sortedlines.length) {
                 inPaging = false;
                 break;
             }

@@ -6,20 +6,21 @@ html {
 body {
   height: 100%;
   overflow: hidden;
+  margin: 0px !important;
   background: #ffffff !important;
 }
 
 #gnContent {
   width: 100%;
-  height: calc(100% - 180px) !important;
   font-family: "Kesong" !important;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: #333333;
   margin-left: auto;
   margin-right: auto;
-  margin-top: 80px;
-  line-height: 1.2rem;
+  margin-top: 60px;
+  line-height: 0.9rem;
   background: #ffffff !important;
+  height: calc(100% - 60px) !important;
 }
 
 #lrbk_title {

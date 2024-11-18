@@ -12,6 +12,8 @@ $background-color: #ffffff;
 $border-color: rgba(255, 97, 0, 0);
 $hover-border-color: rgba(255, 97, 0, 0.4);
 
+$pagetop: 60px;
+
 // Global settings
 html {
     height: 100%;
@@ -21,21 +23,21 @@ html {
 body {
     height: 100%;
     overflow: hidden;
-    //margin: -20px !important;
+    margin: 0px !important;
     background: $white !important;
 }
 
 #gnContent {
     width: 100%; 
-    height: calc(100% - 180px)!important; 
     font-family: "Kesong" !important;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: $dark-grey;
     margin-left: auto;
     margin-right: auto;
-    margin-top: 80px;
-    line-height: 1.2rem;
+    margin-top: $pagetop;
+    line-height: 0.9rem;
     background: $white !important;
+    height: calc(100% - $pagetop)!important; 
 }
 
 #lrbk_title {

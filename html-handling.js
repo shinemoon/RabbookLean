@@ -17,7 +17,7 @@ function Convert(html) {
     var htmllines = [];
     for (var i = 0; i < pagelines.length; i++) {
         if(!isBlankLine(pagelines[i]))
-            htmllines.push("<p>" + pagelines[i].trimStart() + "</p>");
+            htmllines.push("<p class='true-p'>" + pagelines[i].trimStart() + "</p>");
     }
     console.log(htmllines);
     return htmllines;
