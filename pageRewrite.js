@@ -225,7 +225,7 @@ function rewritePage(wctn, startp) {
     var wwidth = $(window).width();
     var wheight = $(window).height() - 120;
 
-    var expectwidth = 960; // Default central colume = 960px;
+    var expectwidth = rtwocolumn ? 1280 : 960; // Default central colume = 960px;
     // Calculate the padding ;
     if (wwidth <= expectwidth) expectwidth = wwidth;
     var sidepadding = (wwidth - expectwidth) / 2;
@@ -248,7 +248,13 @@ function rewritePage(wctn, startp) {
     //容纳行数
     //TODO: 重算！
     //每行字数
-    var chcnt = parseInt((expectwidth - 20) / fwidth);
+    var chcnt;
+    if (rtwocolumn) {
+        chcnt = parseInt((expectwidth - 360) / fwidth);
+        chcnt = parseInt(chcnt/2);
+    } else {
+        chcnt = parseInt((expectwidth - 20) / fwidth);
+    }
 
     // 输入行数
     var newlines = linerized;
@@ -256,7 +262,20 @@ function rewritePage(wctn, startp) {
     // 需要预先算出究竟要分几页，每页分到几个<p>!
 
     // 要用字数优先！
-    var linecnt = parseInt((wheight) / lheight) - parseInt((80) / lheight);
+    var linecnt ;
+    if (rtwocolumn) {
+        linecnt = parseInt((wheight-80) / lheight);
+        linecnt=linecnt*2;
+    } else {
+        linecnt = parseInt((wheight-80) / lheight);
+    }
+
+
+
+
+    console.info("LINECNT:"+linecnt+" CHCNT:" + chcnt);
+
+
 
 
     //应当以字数来精确计算
@@ -302,8 +321,17 @@ function rewritePage(wctn, startp) {
         } else {
             directionarray.push([i, 0]);
         }
+        // for 2 column, always sent them into 2 block, but control the css style .
+        pagedinfo.find('.bb-item').last().append("<div class='left-page column'></div>");
+        pagedinfo.find('.bb-item').last().append("<div class='right-page column'></div>");
         for (var j = 0; j < linecnt; j++) {
-            pagedinfo.find('.bb-item').last().append(sortedlines[lineptr]);
+            if (rtwocolumn) {
+                pagedinfo.find('.bb-item').last().addClass('two-column-item');
+            }
+            if (j < linecnt / 2)
+                pagedinfo.find('.bb-item .left-page').last().append(sortedlines[lineptr]);
+            else
+                pagedinfo.find('.bb-item .right-page').last().append(sortedlines[lineptr]);
             if (lineptr++ == sortedlines.length) {
                 inPaging = false;
                 break;

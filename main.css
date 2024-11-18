@@ -47,7 +47,10 @@ body {
   background: #ffffff !important;
   color: #000000 !important;
 }
-#lrbk_title h1, #lrbk_title h2, #lrbk_title h3, #lrbk_title h4 {
+#lrbk_title h1,
+#lrbk_title h2,
+#lrbk_title h3,
+#lrbk_title h4 {
   font-size: 24px !important;
   font-weight: normal !important;
   font-style: normal !important;
@@ -61,14 +64,16 @@ body {
   color: #ffffff !important;
   font-family: "Kesong";
 }
-#nav a:hover, #nav span:hover {
+#nav a:hover,
+#nav span:hover {
   cursor: pointer;
   border-left: 2px solid lightgreen;
 }
 #nav td {
   height: 35px;
 }
-#nav a, #nav span {
+#nav a,
+#nav span {
   text-decoration: none;
   margin-bottom: 20px;
   color: #333333;
@@ -87,6 +92,16 @@ body {
   white-space: nowrap !important;
   color: #555 !important;
   font-size: 1.2em !important;
+}
+.bb-item.two-column-item {
+  display: flex;
+}
+.bb-item.two-column-item .column {
+  width: 50%;
+  margin-left: 20px;
+}
+.bb-item.two-column-item .column.left-page {
+  border-right: #AAA dotted 1px;
 }
 
 .container,

@@ -14,7 +14,48 @@ var PGTIME = 800;
 
 // Extensikon Variables
 var targets = null;
-var port = chrome.runtime.connect({ name: "contpage" });
+var port;
+
+
+// 建立与 Service Worker 的连接
+function connectToBackground() {
+    port = chrome.runtime.connect({ name: "contpage" });
+
+    console.log("Connected to background script");
+
+    // 监听来自背景脚本的消息
+    port.onMessage.addListener(function (msg) {
+        console.log("Received message from background:", msg);
+        //Log Print
+        if (msg.type == 'cfg') {
+            rflist = msg.flist;
+            rclist = msg.clist;
+            rtlist = msg.tlist;
+            rnlist = msg.nlist;
+            rdir = msg.dir;
+            rtwocolumn=msg.twocolumn;
+            rjs = msg.js;
+        };
+        if (msg.type == "go") {
+            if (msg.progress != null) {
+                progress = msg.progress;
+                handlePage(progress);
+            } else {
+                handlePage(0);
+            }
+        };
+    });
+    // 监听断开连接事件
+    port.onDisconnect.addListener(() => {
+        console.info("Disconnected from background script. Reconnecting...");
+        // 尝试重新连接
+        setTimeout(connectToBackground, 10); // 等待 0.01 秒后重连
+    });
+}
+
+// 初始化连接
+connectToBackground();
+
 var cururl = window.location.href;
 var progress = 0; //the reading progress in one chapter
 var rTitle = null;
@@ -23,6 +64,7 @@ var rclist = [];
 var rtlist = [];
 var rnlist = [];
 var rdir = true;
+var twocolumn= false;
 var rjs = null;
 var lastY = 0;
 var sumDelta = 0;
@@ -37,28 +79,7 @@ var lastpage = false;
 var bktitle = "N.N";
 
 
-//cururl = root.cururl;
-// Main function (Should be used recursively)
 
-port.onMessage.addListener(function (msg) {
-    //Log Print
-    if (msg.type == 'cfg') {
-        rflist = msg.flist;
-        rclist = msg.clist;
-        rtlist = msg.tlist;
-        rnlist = msg.nlist;
-        rdir = msg.dir;
-        rjs = msg.js;
-    };
-    if (msg.type == "go") {
-        if (msg.progress != null) {
-            progress = msg.progress;
-            handlePage(progress);
-        } else {
-            handlePage(0);
-        }
-    };
-});
 
 
 $(document).ready(function () {

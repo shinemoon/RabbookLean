@@ -9,6 +9,7 @@ var clist = [];
 var tlist = [];
 var nlist = [];
 var dir = true;
+var twocolumn= false;
 var rjs = null;
 var lastY = 0;
 var sumDelta = 0;
@@ -19,7 +20,7 @@ var bklist = [];
 
 
 $(document).ready(function () {
-    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [] }, function (result) {
+    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [],'twocolumn':false }, function (result) {
         clist = result.clist;
         tlist = result.tlist;
         nlist = result.nlist;
@@ -27,10 +28,12 @@ $(document).ready(function () {
         css = result.css;
         rjs = result.js;
         dir = result.dir;
+        twocolumn=result.twocolumn;
         bklist = result.bookmarks;
         $('#text-selector').val(JSON.stringify(clist));
         $('#text-filter').val(JSON.stringify(flist));
         $('#reader-dir').prop("checked", dir);
+        $('#two-column').prop("checked", twocolumn);
         $('#title-selector').val(JSON.stringify(tlist));
         $('#nav-selector').val(JSON.stringify(nlist));
         $('#cssinput').val(css);
@@ -52,6 +55,7 @@ $(document).ready(function () {
             tlist = msg.tlist;
             nlist = msg.nlist;
             dir = msg.dir;
+            twocolumn= msg.twocolumn;
             rjs = msg.js;
         };
         if (msg.type == "go") {
@@ -146,12 +150,20 @@ function displayPage() {
             };
         }
 
-        var dir = $("#reader-dir").prop("checked");
+        var sdir = $("#reader-dir").prop("checked");
         try {
-            dir = dir;
+            dir = sdir;
         } catch (err) {
             sok = false;
         };
+
+        var stwocolumn= $("#two-column").prop("checked");
+        try {
+            twocolumn= stwocolumn;
+        } catch (err) {
+            sok = false;
+        };
+
 
         var ctxt = $("#text-selector").val();
         if (ctxt != "") {
@@ -167,7 +179,7 @@ function displayPage() {
         }
 
         if (sok) {
-            chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir }, function () {
+            chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir , "twocolumn":twocolumn}, function () {
                 alert("设置完成");
                 window.location.reload();
             });
@@ -180,7 +192,8 @@ function displayPage() {
         clist = [];
         flist = [];
         dir = false;
-        chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir }, function () { });
+        twocolumn= false;
+        chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir,"twocolumn":twocolumn }, function () { });
         alert("重置完成");
         window.location.reload();
     });

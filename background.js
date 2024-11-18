@@ -6,8 +6,8 @@ chrome.runtime.onConnect.addListener(function (port) {
     // Initialize the connection action:
     // Actions for 'Content Script Page Port'
     if (port.name == 'contpage') {
-        chrome.storage.local.get({ "clist": [], "flist": [], "nlist": [], "tlist": [], "dir": false, "css": null, "js": null }, function (r) {
-            port.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "nlist": r.nlist, "dir": r.dir, "tlist": r.tlist, "css": r.css, "js": r.js });
+        chrome.storage.local.get({ "clist": [], "flist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn":false,"css": null, "js": null }, function (r) {
+            port.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "nlist": r.nlist, "dir": r.dir, "twocolumn":r.twocolumn, "tlist": r.tlist, "css": r.css, "js": r.js });
             // 发送完配置后，理论上就Go了
             // TODO: Progress passing
             port.postMessage({ "type": "go", "progress": null });

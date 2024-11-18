@@ -19,7 +19,7 @@ function Convert(html) {
         if(!isBlankLine(pagelines[i]))
             htmllines.push("<p class='true-p'>" + pagelines[i].trimStart() + "</p>");
     }
-    console.log(htmllines);
+//    console.log(htmllines);
     return htmllines;
 }
 // Textversion
