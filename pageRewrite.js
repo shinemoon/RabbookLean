@@ -121,7 +121,8 @@ function rewritePage(wctn, startp) {
             loadNextPage();
         }
         // pagedown;
-        if (e.keyCode == 32 || e.keyCode == 34 || e.keyCode == 40) {
+        console.log(e.keyCode);
+        if (e.keyCode == 32 || e.keyCode == 34 || e.keyCode == 40 || e.keyCode==74) {
             //ascensorInstance.scrollToDirection('left');
             if (lastpage)
                 detectBottom();
@@ -130,7 +131,7 @@ function rewritePage(wctn, startp) {
         };
 
         // pageup;
-        if (e.keyCode == 33) {
+        if (e.keyCode == 33 || e.keyCode==75) {
             //ascensorInstance.scrollToDirection('right');
             ascensorInstance.prev();
         };
