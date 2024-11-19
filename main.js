@@ -13,7 +13,8 @@ var PGTIME = 800;
 
 
 // Extensikon Variables
-var targets = null;
+var buffers =[]; // to save read pages
+var target = null;
 var port;
 
 
@@ -112,14 +113,21 @@ function handlePage(startp) {
     $('#lrbk_title').remove();
     var r = $('body').html();
 
-    handleContent(r);
+    handleContent(r, cururl);
 
-    rewritePage(targets, startp);
+    rewritePage(target, startp);
 };
 
 
 // Handle the page content;
-function handleContent(bodytxt) {
+function handleContent(bodytxt, url=null) {
+    // TODO: 先查找buffers有没有存好的!
+    let bufs = bufCheck(url);
+    if(bufs.hit) {
+        target = bufs.content;
+        return;
+    }
+
     dummy = $("<div id='dummy'></div>");
     dummy.append(bodytxt);
 
@@ -143,8 +151,9 @@ function handleContent(bodytxt) {
     if (jres[0]) {
         cbody.find('iframe').remove();
         cbody.find('iframe').css('display', 'none!important');
+
         //To extract the content and navigations
-        targets = nextractContent(cbody);
+        target = parseContent(cbody);
         // Got the next page's key info } else {
     }
 };
@@ -157,8 +166,8 @@ function loadNextPage() {
     notinpaging = false;
     // Get content from iframe
     cururl = $('#npage').prop('src');
-    handleContent(document.getElementById('npage').contentWindow.document.body.innerHTML);
-    rewritePage(targets, 0);
+    handleContent(document.getElementById('npage').contentWindow.document.body.innerHTML, cururl);
+    rewritePage(target, 0);
     pgtimer = window.setTimeout(function () {
         notinpaging = true;
     }, PGTIME);
@@ -196,7 +205,16 @@ function judgePage(txt) {
 };
 
 
-function nextractContent(ctn) {
+function parseContent(ctn) {
+    /* Function to extract content input 
+    input is the html input body 
+    output: retarr is one array
+    [0]: Title Text
+    [1]:
+    [2]:
+    [3]:  Link for next page nav
+    [4]:  Artical Content
+    */
     //1. current idea, to locate where is the title? where is the nav part? and then to grab the text between them
     var cTitle = [];
 
@@ -320,4 +338,9 @@ function nextractContent(ctn) {
     retarr[4] = rtContent;
     return retarr;
 
+}
+
+function bufCheck(url=null) {
+    //Check if the url had been stored in this run
+    return {'hit':false, 'content':null};
 }
