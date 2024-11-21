@@ -247,7 +247,6 @@ function rewritePage(wctn, startp) {
     //console.info("Line Height:" + $('p').outerHeight(true));
 
     //容纳行数
-    //TODO: 重算！
     //每行字数
     var chcnt;
     if (rtwocolumn) {
@@ -259,7 +258,6 @@ function rewritePage(wctn, startp) {
 
     // 输入行数
     var newlines = linerized;
-    // TODO: 每页所谓的行数将是动态的，即，这里的行数会是<p>数量
     // 需要预先算出究竟要分几页，每页分到几个<p>!
 
     // 要用字数优先！

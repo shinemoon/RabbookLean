@@ -11,9 +11,13 @@ var notinpaging = true; // Avoid wheel paging to fast
 var pgtimer = null;
 var PGTIME = 800;
 
+var reconnected = false;
 
-// Extensikon Variables
-var buffers =[]; // to save read pages
+
+// 全局变量
+var buffers = [null, null, null, null, null];
+
+
 var target = null;
 var port;
 
@@ -34,10 +38,10 @@ function connectToBackground() {
             rtlist = msg.tlist;
             rnlist = msg.nlist;
             rdir = msg.dir;
-            rtwocolumn=msg.twocolumn;
+            rtwocolumn = msg.twocolumn;
             rjs = msg.js;
         };
-        if (msg.type == "go") {
+        if (msg.type == "go" && reconnected == false) {
             if (msg.progress != null) {
                 progress = msg.progress;
                 handlePage(progress);
@@ -50,6 +54,7 @@ function connectToBackground() {
     port.onDisconnect.addListener(() => {
         console.info("Disconnected from background script. Reconnecting...");
         // 尝试重新连接
+        reconnected = true;
         setTimeout(connectToBackground, 10); // 等待 0.01 秒后重连
     });
 }
@@ -65,7 +70,7 @@ var rclist = [];
 var rtlist = [];
 var rnlist = [];
 var rdir = true;
-var twocolumn= false;
+var twocolumn = false;
 var rjs = null;
 var lastY = 0;
 var sumDelta = 0;
@@ -120,10 +125,10 @@ function handlePage(startp) {
 
 
 // Handle the page content;
-function handleContent(bodytxt, url=null) {
+function handleContent(bodytxt, url = null) {
     // TODO: 先查找buffers有没有存好的!
     let bufs = bufCheck(url);
-    if(bufs.hit) {
+    if (bufs.hit) {
         target = bufs.content;
         return;
     }
@@ -340,7 +345,62 @@ function parseContent(ctn) {
 
 }
 
-function bufCheck(url=null) {
+function bufCheck(url = null) {
     //Check if the url had been stored in this run
-    return {'hit':false, 'content':null};
+    return { 'hit': false, 'content': null };
+}
+
+
+function generateShortHash(input) {
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+        const char = input.charCodeAt(i);
+        hash = (hash << 5) - hash + char; // 位运算，快速计算hash
+        hash |= 0; // 转为32位整数
+    }
+    // 转为更短的正整数或字符串
+    return Math.abs(hash).toString(36); // 使用 base36（数字+字母）缩短输出
+}
+
+
+// pushBuf 函数
+function pushBuf(inElem) {
+    if (!inElem || !inElem.key) {
+        console.error("Invalid input: inElem must have a 'key' field.");
+        return;
+    }
+
+    const key = inElem.key;
+    const index = buffers.findIndex(el => el && el.key === key);
+
+    // 如果已经存在相同 key 的元素，删除它
+    if (index !== -1) {
+        buffers[index] = null;
+    }
+
+    // 查找第一个 null 的位置
+    const nullIndex = buffers.indexOf(null);
+
+    if (nullIndex !== -1) {
+        // 有空位，用 inElem 替换第一个 null
+        buffers[nullIndex] = inElem;
+    } else {
+        // 没有空位，删除第一个元素，剩余元素前移，最后一个位置替换为 inElem
+        buffers.shift(); // 删除第一个元素
+        buffers.push(inElem); // 替换最后一个位置
+    }
+}
+
+
+function fetchBuf(key) {
+    if (!key) {
+        console.error("Invalid input: key is required.");
+        return null;
+    }
+
+    // 查找 buffers 中 key 对应的元素
+    const result = buffers.find(el => el && el.key === key);
+
+    // 如果找到，返回元素；否则返回 null
+    return result || null;
 }
