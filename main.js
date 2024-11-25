@@ -36,6 +36,7 @@ function connectToBackground() {
             rflist = msg.flist;
             rclist = msg.clist;
             rtlist = msg.tlist;
+            rplist = msg.plist;
             rnlist = msg.nlist;
             rdir = msg.dir;
             rtwocolumn = msg.twocolumn;
@@ -68,6 +69,7 @@ var rTitle = null;
 var rflist = [];
 var rclist = [];
 var rtlist = [];
+var rplist = [];
 var rnlist = [];
 var rdir = true;
 var twocolumn = false;
@@ -127,9 +129,9 @@ function handlePage(startp) {
 // Handle the page content;
 function handleContent(bodytxt, url = null) {
     // TODO: 先查找buffers有没有存好的!
-    let bufs = bufCheck(url);
-    if (bufs.hit) {
-        target = bufs.content;
+    let buf = fetchBuf(generateShortHash(url));
+    if (buf != null) {
+        target = buf.content;
         return;
     }
 
@@ -159,12 +161,27 @@ function handleContent(bodytxt, url = null) {
 
         //To extract the content and navigations
         target = parseContent(cbody);
-        // Got the next page's key info } else {
+
+        //And update the bufarray
+        pushBuf({ 'key': generateShortHash(url), 'content': target });
+
     }
 };
 
 
 
+function loadPrevPage() {
+    lastpage = false;
+    window.clearTimeout(pgtimer);
+    notinpaging = false;
+    // Get content from iframe
+    cururl = $('#ppage').prop('src');
+    handleContent(document.getElementById('ppage').contentWindow.document.body.innerHTML, cururl);
+    rewritePage(target, 0);
+    pgtimer = window.setTimeout(function () {
+        notinpaging = true;
+    }, PGTIME);
+};
 function loadNextPage() {
     lastpage = false;
     window.clearTimeout(pgtimer);
@@ -176,10 +193,7 @@ function loadNextPage() {
     pgtimer = window.setTimeout(function () {
         notinpaging = true;
     }, PGTIME);
-
-
-};
-
+}
 /* 
 Judge the current page's status, i.e. if any prev/next page there 
     Return: [pageInfoorNot, pageType]
@@ -216,7 +230,7 @@ function parseContent(ctn) {
     output: retarr is one array
     [0]: Title Text
     [1]:
-    [2]:
+    [2]:  Link for prev page nav
     [3]:  Link for next page nav
     [4]:  Artical Content
     */
@@ -241,14 +255,27 @@ function parseContent(ctn) {
         cTitle = ctn.find("strong").eq(0);
     //b: Nav
     var cNavNext = [];
+    var cNavPrev = [];
     // If customized
+    // All possible title filter, With higher priority
+    $.each(rplist, function (i, v) {
+        if (ctn.find(v).length > 0) {
+            cNavPrev = ctn.find(v).eq(0);
+        }
+    });
+    if (cNavPrev.length == 0) {
+        var cPrevReg = '.*[上|前]\s*一*\s*[章|回|页|节].*';
+        cNavPrev = ctn.find("span, a, button").filter(function () { return ($(this).is('[href]') && ($(this).text().match(cPrevReg) != null)); }).filter(':last');
+        if (cNavPrev.length == 0)
+            cNavPrev = ctn.find("span, a, button").filter(function () { return ($(this).is('[href]') && $(this).text().match('.*[上|前]\s*一*\s*[章|回|页|节].*') != null); }).filter(':last');
+    }
+
     // All possible title filter, With higher priority
     $.each(rnlist, function (i, v) {
         if (ctn.find(v).length > 0) {
             cNavNext = ctn.find(v).eq(0);
         }
     });
-
     if (cNavNext.length == 0) {
         var cNextReg = '.*[下|后]\s*一*\s*[章|回|页|节].*';
         cNavNext = ctn.find("span, a, button").filter(function () { return ($(this).is('[href]') && ($(this).text().match(cNextReg) != null)); }).filter(':last');
@@ -263,11 +290,20 @@ function parseContent(ctn) {
         chdl.prevAll().remove();
         chdl = chdl.parent();
     }
+
     chdl = cNavNext;
     while (chdl.length > 0) {
         chdl.nextAll().remove();
         chdl = chdl.parent();
     }
+
+    chdl = cNavPrev;
+    while (chdl.length > 0) {
+        chdl.nextAll().remove();
+        chdl = chdl.parent();
+    }
+
+
 
     //Clean further
     $('link').remove();
@@ -280,10 +316,11 @@ function parseContent(ctn) {
         }
     }).remove();
 
-    var retarr = [cTitle.text(), null, null, cNavNext.clone(), null];
+    var retarr = [cTitle.text(), null, cNavPrev.clone(), cNavNext.clone(), null];
     // To remove all other element
     cTitle.remove();
     cNavNext.remove();
+    cNavPrev.remove();
 
     var cContent = $("<div id='nctn'></div>");
 
@@ -345,12 +382,6 @@ function parseContent(ctn) {
 
 }
 
-function bufCheck(url = null) {
-    //Check if the url had been stored in this run
-    return { 'hit': false, 'content': null };
-}
-
-
 function generateShortHash(input) {
     let hash = 0;
     for (let i = 0; i < input.length; i++) {
@@ -393,6 +424,7 @@ function pushBuf(inElem) {
 
 
 function fetchBuf(key) {
+    console.debug("Trying to fetch: " + key);
     if (!key) {
         console.error("Invalid input: key is required.");
         return null;

@@ -63,11 +63,9 @@ body {
   bottom: 0;
   color: #ffffff !important;
   font-family: "Kesong";
-}
-#nav a:hover,
-#nav span:hover {
-  cursor: pointer;
-  border-left: 2px solid lightgreen;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
 }
 #nav td {
   height: 35px;
@@ -82,9 +80,27 @@ body {
   padding-left: 15px;
   padding-top: 5px;
   padding-bottom: 5px;
+  width: 60px;
+}
+#nav a.right,
+#nav span.right {
   border-left: 2px solid green;
   text-align: right;
-  width: 120px;
+}
+#nav a.right:hover,
+#nav span.right:hover {
+  cursor: pointer;
+  border-left: 2px solid lightgreen;
+}
+#nav a.left,
+#nav span.left {
+  border-right: 2px solid green;
+  text-align: left;
+}
+#nav a.left:hover,
+#nav span.left:hover {
+  cursor: pointer;
+  border-right: 2px solid lightgreen;
 }
 
 .bb-item {

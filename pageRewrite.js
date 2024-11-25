@@ -29,12 +29,13 @@ function rewritePage(wctn, startp) {
     $('body').append('<div class="pnav" id="pup"></div>');
     $('body').append('<div class="pnav" id="pdown"></div>');
     var nv = $("<div id='nav'></div>");
-    nv.append("<tr><td><span class='fetchnext' style='cursor:pointer;' href='" + urlProceed(wctn[3][0].getAttribute('href')) + "'>" + "下一章" + "</span></td></tr>");
+    nv.append("<span class='fetchprev left' style='cursor:pointer;' href='" + urlProceed(wctn[2][0].getAttribute('href')) + "'>" + "上一章" + "</span><span class='fetchnext right' style='cursor:pointer;' href='" + urlProceed(wctn[3][0].getAttribute('href')) + "'>" + "下一章" + "</span>");
     $('body').append(nv);
     $('body').find('[style]').removeAttr('style');
     $('body').find('[onkeydown]').removeAttr('onkeydown');
 
     $('body').append("<iframe id='npage' style='display:none;' src='" + urlProceed(wctn[3][0].getAttribute('href')) + "'></iframe>")
+    $('body').append("<iframe id='ppage' style='display:none;' src='" + urlProceed(wctn[2][0].getAttribute('href')) + "'></iframe>")
 
 
     // Go to top
@@ -47,6 +48,16 @@ function rewritePage(wctn, startp) {
         rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
         progress = 0;
         loadNextPage();
+    });
+
+    //For next page's info
+    $('.fetchprev').unbind('click').bind('click', function () {
+        reachBottom = false;
+        toBottom = 200;
+        toBottom_d = 0;
+        rTitle = document.getElementById('ppage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
+        progress = 0;
+        loadPrevPage();
     });
 
 

@@ -7,6 +7,7 @@ var rTitle = null;
 var flist = [];
 var clist = [];
 var tlist = [];
+var plist = [];
 var nlist = [];
 var dir = true;
 var twocolumn= false;
@@ -20,9 +21,10 @@ var bklist = [];
 
 
 $(document).ready(function () {
-    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [],'twocolumn':false }, function (result) {
+    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'plist':[], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [],'twocolumn':false }, function (result) {
         clist = result.clist;
         tlist = result.tlist;
+        plist = result.plist;
         nlist = result.nlist;
         flist = result.flist;
         css = result.css;
@@ -35,6 +37,7 @@ $(document).ready(function () {
         $('#reader-dir').prop("checked", dir);
         $('#two-column').prop("checked", twocolumn);
         $('#title-selector').val(JSON.stringify(tlist));
+        $('#nav-p-selector').val(JSON.stringify(plist));
         $('#nav-selector').val(JSON.stringify(nlist));
         $('#cssinput').val(css);
         $('#jsinput').val(rjs);
@@ -53,6 +56,7 @@ $(document).ready(function () {
             flist = msg.flist;
             clist = msg.clist;
             tlist = msg.tlist;
+            plist = msg.plist;
             nlist = msg.nlist;
             dir = msg.dir;
             twocolumn= msg.twocolumn;
@@ -125,6 +129,18 @@ function displayPage() {
                 sok = false;
             };
         }
+        var ptxt = $("#nav-p-selector").val();
+        if (ptxt != "") {
+            try {
+                var cps = JSON.parse(ptxt);
+                if (Object.prototype.toString.call(cps) === '[object Array]') {
+                    plist = cps;
+                }
+            } catch (err) {
+                sok = false;
+            };
+        }
+
         var ntxt = $("#nav-selector").val();
         if (ntxt != "") {
             try {
@@ -137,6 +153,7 @@ function displayPage() {
             };
         }
 
+ 
         var ftxt = $("#text-filter").val();
         if (ftxt != "") {
             try {
@@ -179,7 +196,7 @@ function displayPage() {
         }
 
         if (sok) {
-            chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir , "twocolumn":twocolumn}, function () {
+            chrome.storage.local.set({ "clist": clist, "flist": flist, "plist":plist,"nlist": nlist, "tlist": tlist, "dir": dir , "twocolumn":twocolumn}, function () {
                 alert("设置完成");
                 window.location.reload();
             });
@@ -193,7 +210,7 @@ function displayPage() {
         flist = [];
         dir = false;
         twocolumn= false;
-        chrome.storage.local.set({ "clist": clist, "flist": flist, "nlist": nlist, "tlist": tlist, "dir": dir,"twocolumn":twocolumn }, function () { });
+        chrome.storage.local.set({ "clist": clist, "flist": flist, "plist":plist, "nlist": nlist, "tlist": tlist, "dir": dir,"twocolumn":twocolumn }, function () { });
         alert("重置完成");
         window.location.reload();
     });

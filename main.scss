@@ -81,12 +81,9 @@ body {
     bottom: 0;
     color: $white !important;
     font-family: "Kesong";
-
-    a:hover,
-    span:hover {
-        cursor: pointer;
-        border-left: 2px solid $green;
-    }
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
 
     td {
         height: 35px;
@@ -102,9 +99,27 @@ body {
         padding-left: 15px;
         padding-top: 5px;
         padding-bottom: 5px;
-        border-left: 2px solid green;
-        text-align: right;
-        width: 120px;
+        width: 60px;
+
+        &.right {
+            border-left: 2px solid green;
+            text-align: right;
+            &:hover {
+                cursor: pointer;
+                border-left: 2px solid $green;
+            }
+        }
+
+        &.left {
+            border-right: 2px solid green;
+            text-align: left;
+            &:hover {
+                cursor: pointer;
+                border-right: 2px solid $green;
+            }
+
+        }
+
     }
 }
 
@@ -116,6 +131,7 @@ body {
 
     &.two-column-item {
         display: flex;
+
         .column {
             width: 50%;
             margin-left: 20px;

@@ -9,8 +9,20 @@ chrome.runtime.onConnect.addListener(function (port) {
     if (port.name == 'contpage') {
         cntport ++;
         console.log("Content Port in Round-#"+cntport);
-        chrome.storage.local.get({ "clist": [], "flist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn":false,"css": null, "js": null }, function (r) {
-            port.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "nlist": r.nlist, "dir": r.dir, "twocolumn":r.twocolumn, "tlist": r.tlist, "css": r.css, "js": r.js });
+        chrome.storage.local.get({ "clist": [], "flist": [], "plist":[],"nlist": [], "tlist": [], "dir": false, "twocolumn":false,"css": null, "js": null }, function (r) {
+            /* 配置说明 */
+            /*
+            "clist": [], 自定义内容选择符列表
+             "flist": [], 自定义正文内容过滤列表
+             "plist":[], 自定义上一页翻页选择符列表
+            "nlist": [],  自定义下一页翻页选择符列表
+            "tlist": [], 自定义标题选择符列表
+             "dir": false, 翻页方向，即纵向或者横向
+             "twocolumn":false,  双页阅读模式
+             "css": null, 自定义css样式
+             "js": null , 自定义脚本
+            */
+            port.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "plist":r.plist,"nlist": r.nlist, "dir": r.dir, "twocolumn":r.twocolumn, "tlist": r.tlist, "css": r.css, "js": r.js });
             // 发送完配置后，理论上就Go了
             // TODO: Progress passing
             port.postMessage({ "type": "go", "progress": null });
