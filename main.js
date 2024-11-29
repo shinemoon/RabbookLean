@@ -384,7 +384,9 @@ function parseContent(ctn) {
     rtContent.find('pre').replaceWith(function () {
         return $("<div />", { html: $(this).html().replace(/\n/g, "<br><br>") });
     });
-    retarr[4] = rtContent.clone();
+    //retarr[4] = rtContent.clone();
+    var htmlString = rtContent.prop('outerHTML'); // 获取完整的 HTML 字符串
+    retarr[4] = htmlString;
     return retarr;
 }
 

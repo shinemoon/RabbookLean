@@ -31,7 +31,7 @@ function rewritePage(url, startp) {
 
 
     //Content
-    $('body').append(loadedContent[4]);
+    $('body').append($(loadedContent[4]));
     $('body').find('a').remove();
 
     //Navigation
@@ -252,7 +252,7 @@ function rewritePage(url, startp) {
     var sidepadding = (wwidth - expectwidth) / 2;
 
     //var curContent = $('#gnContent').html();
-    var curContent = loadedContent[4].html();
+    var curContent = loadedContent[4];
 
 
     $('#gnContent').hide();
