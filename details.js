@@ -242,7 +242,7 @@ function displayPage() {
 
 
     //Some patch
-    var jsplc = "当有内容时，将会在处理解析页面内容时执行这段代码。\n\n注意： 强烈不建议普通用户修改增加这部分配置，如果是没有基础的用户，与其学习脚本编写，不如换个普通一点的网站。 \n\n而待处理的页面内容，此时已经被放置在名为target的全局数组中，目前有意义的部分是：\n\n\ttarget[0]: 标题名; \n\n\ttarget[3][0]: 包含有翻页内容的页面元素（即通过前面的翻页选择所选定的内容）; \n\n\ttarget[4][0]: 包含有正文信息的页面元素（即通过前面的正文选择所选定的内容)。\n\n处理完毕后，需要原样传递回target参数内,需要更多信息，建议先通过console.log打印target来理解。";
+    var jsplc = "当有内容时，将会在处理解析页面内容时执行这段代码。\n\n注意： 强烈不建议普通用户修改增加这部分配置，如果是没有基础的用户，与其学习脚本编写，不如换个普通一点的网站。 \n\n而待处理的页面内容，此时已经被放置在名为loadedContent的全局数组中，目前有意义的部分是：\n\n\tloadedContent[0]: 标题名; \n\n\tloadedContent[3][0]: 包含有翻页内容的页面元素（即通过前面的翻页选择所选定的内容）; \n\n\tloadedContent[4][0]: 包含有正文信息的页面元素（即通过前面的正文选择所选定的内容)。\n\n处理完毕后，需要原样传递回loadedContent参数内,需要更多信息，建议先通过console.log打印loadedContent来理解。";
 
 
     $('#jsinput').attr('placeholder', jsplc);
