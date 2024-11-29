@@ -447,5 +447,3 @@ function fetchBuf(key) {
     console.debug(result);
     return result || null;
 }
-
-//TODO: resize的动作响应处理 
