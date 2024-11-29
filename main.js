@@ -96,7 +96,9 @@ $(document).ready(function () {
 
     // Refine page after resize
     $(window).resize(function () {
-        handlePage(progress);
+        console.log("Re-sized");
+        //handlePage(progress);
+        rewritePage(cururl, progress);
         if ($('#lrbk_title').text() == "") {
             $('#lrbk_title').html(bktitle.html());
         }
@@ -119,19 +121,22 @@ function handlePage(startp) {
     bktitle = $('#lrbk_title').clone();
     $('#lrbk_title').remove();
     var r = $('body').html();
+    //If current url is also handled then r is different
 
     handleContent(r, cururl);
-
-    rewritePage(target, startp);
+    rewritePage(cururl, startp);
 };
 
 
 // Handle the page content;
 function handleContent(bodytxt, url = null) {
-    // TODO: 先查找buffers有没有存好的!
+    console.log("handle content");
+    // 先查找buffers有没有存好的! 如果已经解析过了，就不用去反复解析了 
+    console.log('url:'+url);
     let buf = fetchBuf(generateShortHash(url));
     if (buf != null) {
-        target = buf.content;
+        console.log('hit url');
+//        target = buf.content;
         return;
     }
 
@@ -160,11 +165,13 @@ function handleContent(bodytxt, url = null) {
         cbody.find('iframe').css('display', 'none!important');
 
         //To extract the content and navigations
-        target = parseContent(cbody);
+        let loaded = parseContent(cbody);
 
-        //And update the bufarray
-        pushBuf({ 'key': generateShortHash(url), 'content': target });
+    //And update the bufarray
+        pushBuf({ 'key': generateShortHash(url), 'content': loaded});
 
+
+    
     }
 };
 
@@ -177,7 +184,7 @@ function loadPrevPage() {
     // Get content from iframe
     cururl = $('#ppage').prop('src');
     handleContent(document.getElementById('ppage').contentWindow.document.body.innerHTML, cururl);
-    rewritePage(target, 0);
+    rewritePage(cururl, 0);
     pgtimer = window.setTimeout(function () {
         notinpaging = true;
     }, PGTIME);
@@ -189,7 +196,7 @@ function loadNextPage() {
     // Get content from iframe
     cururl = $('#npage').prop('src');
     handleContent(document.getElementById('npage').contentWindow.document.body.innerHTML, cururl);
-    rewritePage(target, 0);
+    rewritePage(cururl, 0);
     pgtimer = window.setTimeout(function () {
         notinpaging = true;
     }, PGTIME);
@@ -377,9 +384,8 @@ function parseContent(ctn) {
     rtContent.find('pre').replaceWith(function () {
         return $("<div />", { html: $(this).html().replace(/\n/g, "<br><br>") });
     });
-    retarr[4] = rtContent;
+    retarr[4] = rtContent.clone();
     return retarr;
-
 }
 
 function generateShortHash(input) {
@@ -396,6 +402,7 @@ function generateShortHash(input) {
 
 // pushBuf 函数
 function pushBuf(inElem) {
+    console.debug("Trying to push: " + inElem);
     if (!inElem || !inElem.key) {
         console.error("Invalid input: inElem must have a 'key' field.");
         return;
@@ -420,6 +427,7 @@ function pushBuf(inElem) {
         buffers.shift(); // 删除第一个元素
         buffers.push(inElem); // 替换最后一个位置
     }
+    console.debug(inElem.content);
 }
 
 
@@ -434,5 +442,8 @@ function fetchBuf(key) {
     const result = buffers.find(el => el && el.key === key);
 
     // 如果找到，返回元素；否则返回 null
+    console.debug(result);
     return result || null;
 }
+
+//TODO: resize的动作响应处理 

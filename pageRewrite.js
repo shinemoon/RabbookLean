@@ -1,4 +1,13 @@
-function rewritePage(wctn, startp) {
+function rewritePage(url, startp) {
+    let buf = fetchBuf(generateShortHash(url));
+    if (buf == null) {
+        console.error('Invalid Page : '+url);
+        //        target = buf.content;
+        return;
+    }
+
+    console.log("Page Rewrite");
+    loadedContent = buf.content;
 
     if (rjs != null && rjs != "") {
         eval(rjs);
@@ -14,7 +23,7 @@ function rewritePage(wctn, startp) {
     //Title
     $('body').append('<div id="lrbk_title"></div>');
     $('body').append('<div id="indexinfo"><span id="currentindex"></span> / <span id="totalindex"></span></div>');
-    $('#lrbk_title').append(wctn[0]);
+    $('#lrbk_title').append(loadedContent[0]);
 
     $('#lrbk_title').click(function () {
         window.location.href = cururl;
@@ -22,20 +31,20 @@ function rewritePage(wctn, startp) {
 
 
     //Content
-    $('body').append(wctn[4]);
+    $('body').append(loadedContent[4]);
     $('body').find('a').remove();
 
     //Navigation
     $('body').append('<div class="pnav" id="pup"></div>');
     $('body').append('<div class="pnav" id="pdown"></div>');
     var nv = $("<div id='nav'></div>");
-    nv.append("<span class='fetchprev left' style='cursor:pointer;' href='" + urlProceed(wctn[2][0].getAttribute('href')) + "'>" + "上一章" + "</span><span class='fetchnext right' style='cursor:pointer;' href='" + urlProceed(wctn[3][0].getAttribute('href')) + "'>" + "下一章" + "</span>");
+    nv.append("<span class='fetchprev left' style='cursor:pointer;' href='" + urlProceed(loadedContent[2][0].getAttribute('href')) + "'>" + "上一章" + "</span><span class='fetchnext right' style='cursor:pointer;' href='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'>" + "下一章" + "</span>");
     $('body').append(nv);
     $('body').find('[style]').removeAttr('style');
     $('body').find('[onkeydown]').removeAttr('onkeydown');
 
-    $('body').append("<iframe id='npage' style='display:none;' src='" + urlProceed(wctn[3][0].getAttribute('href')) + "'></iframe>")
-    $('body').append("<iframe id='ppage' style='display:none;' src='" + urlProceed(wctn[2][0].getAttribute('href')) + "'></iframe>")
+    $('body').append("<iframe id='npage' style='display:none;' src='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'></iframe>")
+    $('body').append("<iframe id='ppage' style='display:none;' src='" + urlProceed(loadedContent[2][0].getAttribute('href')) + "'></iframe>")
 
 
     // Go to top
@@ -132,8 +141,8 @@ function rewritePage(wctn, startp) {
             loadNextPage();
         }
         // pagedown;
-        console.log(e.keyCode);
-        if (e.keyCode == 32 || e.keyCode == 34 || e.keyCode == 40 || e.keyCode==74) {
+//        console.log(e.keyCode);
+        if (e.keyCode == 32 || e.keyCode == 34 || e.keyCode == 40 || e.keyCode == 74) {
             //ascensorInstance.scrollToDirection('left');
             if (lastpage)
                 detectBottom();
@@ -142,7 +151,7 @@ function rewritePage(wctn, startp) {
         };
 
         // pageup;
-        if (e.keyCode == 33 || e.keyCode==75) {
+        if (e.keyCode == 33 || e.keyCode == 75) {
             //ascensorInstance.scrollToDirection('right');
             ascensorInstance.prev();
         };
@@ -242,10 +251,8 @@ function rewritePage(wctn, startp) {
     if (wwidth <= expectwidth) expectwidth = wwidth;
     var sidepadding = (wwidth - expectwidth) / 2;
 
-
-
-
-    var curContent = $('#gnContent').html();
+    //var curContent = $('#gnContent').html();
+    var curContent = loadedContent[4].html();
 
 
     $('#gnContent').hide();
@@ -262,7 +269,7 @@ function rewritePage(wctn, startp) {
     var chcnt;
     if (rtwocolumn) {
         chcnt = parseInt((expectwidth - 360) / fwidth);
-        chcnt = parseInt(chcnt/2);
+        chcnt = parseInt(chcnt / 2);
     } else {
         chcnt = parseInt((expectwidth - 20) / fwidth);
     }
@@ -272,21 +279,13 @@ function rewritePage(wctn, startp) {
     // 需要预先算出究竟要分几页，每页分到几个<p>!
 
     // 要用字数优先！
-    var linecnt ;
+    var linecnt;
     if (rtwocolumn) {
-        linecnt = parseInt((wheight-80) / lheight);
-        linecnt=linecnt*2;
+        linecnt = parseInt((wheight - 80) / lheight);
+        linecnt = linecnt * 2;
     } else {
-        linecnt = parseInt((wheight-80) / lheight);
+        linecnt = parseInt((wheight - 80) / lheight);
     }
-
-
-
-
-    console.info("LINECNT:"+linecnt+" CHCNT:" + chcnt);
-
-
-
 
     //应当以字数来精确计算
     var pagedinfo = $("<div></div>");
@@ -295,6 +294,7 @@ function rewritePage(wctn, startp) {
     // 重新生成以及打断字符段落
     // 定义存储结果的新数组
     var sortedlines = [];
+    console.info("LINECNT:" + linecnt + " CHCNT:" + chcnt);
 
     // 遍历每一段内容
     newlines.forEach(line => {
@@ -312,6 +312,7 @@ function rewritePage(wctn, startp) {
         // 在每个原始的段落后面插入一个空段落 (暂时不做，太空了)
         //sortedlines.push("<p class='true-p'>&nbsp</p>");
     });
+
 
     //接下来是把sortedllines分成N页，每页linecnt行
 
@@ -348,6 +349,8 @@ function rewritePage(wctn, startp) {
             }
         }
     }
+
+
     $('#gnContent').empty().append(pagedinfo.html());
     $('#gnContent').find('.bb-item').css('width', expectwidth + "px");
     $('#gnContent').find('.bb-item').css('padding-right', sidepadding);
