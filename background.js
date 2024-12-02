@@ -62,6 +62,24 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
                 console.log("Message received in Service Worker:", msg);
                 if (msg.type == "register") {
                     allowedurl = msg.url; //注册网址，等待注入
+                    setTimeout(function () {
+                        chrome.tabs.query({}, function (tabs) {
+                            // 检查是否已经存在目标页面
+                            const existingTab = tabs.find(tab => tab.url.includes(allowedurl));
+                            if (existingTab) {
+                                // 如果找到已有页面，则切换到该页面
+                                chrome.tabs.update(existingTab.id, { active: true });
+                                // 然后试图获取当前window开始注入
+                                chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+                                    curtab = tabs[0];
+                                    console.log(curtab);
+                                    readPage(config, curtab);
+                                });
+                            } else {
+                                //chrome.tabs.create({ url: targetUrl });
+                            }
+                        });
+                    }, 100);
                 }
             });
         }
@@ -109,25 +127,6 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
         }
 
     });
-
-    // 监听标签页更新事件
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        // 确保页面加载完成, 并且必须是当前允许的这个网址
-        // TODO: 找到这两个tab的异同，解决问题
-        if (changeInfo.status === "complete" && tab.url == allowedurl) {
-            console.log(`Injecting script into ${tab.url}`);
-            // 使用 tabId 获取完整的 tab 信息
-            chrome.tabs.get(tabId, (fullTab) => {
-                console.log('Complete Tab info:', fullTab);
-                // 使用完整的 tab 对象执行你的逻辑
-                readPage(config, fullTab);
-                allowedurl = null;
-            });
-        }
-    });
-
-
-
 });
 
 
