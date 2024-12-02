@@ -1,15 +1,25 @@
 // service_worker.js
-var cntport = 0;
+var cntport = null;
+var detport = null;
 
 // 监听来自其他部分（如content script）的连接请求
 chrome.runtime.onConnect.addListener(function (port) {
     console.log("Connected with port:", port);
     // Initialize the connection action:
+    // Action for ' Details Page Port"
+    if (port.name == 'detailspage') {
+        detport = port;
+        // 可选：处理断开连接
+        detport.onDisconnect.addListener(function () {
+            detport = null;
+            console.log("Detail Port disconnected");
+        });
+    }
+
     // Actions for 'Content Script Page Port'
     if (port.name == 'contpage') {
-        cntport ++;
-        console.log("Content Port in Round-#"+cntport);
-        chrome.storage.local.get({ "clist": [], "flist": [], "plist":[],"nlist": [], "tlist": [], "dir": false, "twocolumn":false,"css": null, "js": null }, function (r) {
+        cntport = port;
+        chrome.storage.local.get({ "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": false, "css": null, "js": null }, function (r) {
             /* 配置说明 */
             /*
             "clist": [], 自定义内容选择符列表
@@ -22,26 +32,28 @@ chrome.runtime.onConnect.addListener(function (port) {
              "css": null, 自定义css样式
              "js": null , 自定义脚本
             */
-            port.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "plist":r.plist,"nlist": r.nlist, "dir": r.dir, "twocolumn":r.twocolumn, "tlist": r.tlist, "css": r.css, "js": r.js });
+            cntport.postMessage({ "type": "cfg", "clist": r.clist, "flist": r.flist, "plist": r.plist, "nlist": r.nlist, "dir": r.dir, "twocolumn": r.twocolumn, "tlist": r.tlist, "css": r.css, "js": r.js });
             // 发送完配置后，理论上就Go了
             // TODO: Progress passing
-            port.postMessage({ "type": "go", "progress": null });
+            cntport.postMessage({ "type": "go", "progress": null });
         });
-        // 监听从这个 port 收到的消息
+        // 监听从这个 cntport 收到的消息
         //  用来更新书签
-        port.onMessage.addListener(function (msg) {
+        cntport.onMessage.addListener(function (msg) {
             console.log("Message received in Service Worker:", msg);
             if (msg.type == "updatebk") {
                 // To update bookmark in serviced worker
                 updateBookmarks(msg);
             }
         });
+
+        // 可选：处理断开连接
+        cntport.onDisconnect.addListener(function () {
+            cntport = null;
+            console.log("Cont cntport disconnected");
+        });
     }
 
-    // 可选：处理断开连接
-    port.onDisconnect.addListener(function () {
-        console.log("Port disconnected");
-    });
 });
 
 
@@ -72,8 +84,6 @@ function updateBookmarks(msg) {
             return cr;
         }
     };
-
-
     chrome.storage.local.get({ 'bookmarks': [] }, function (result) {
         bklist = result.bookmarks;
         // Update bookmark
@@ -86,6 +96,8 @@ function updateBookmarks(msg) {
         bklist.push({ rTitle: rTitle, cururl: cururl, curprog: curprog });
         chrome.storage.local.set({ 'bookmarks': bklist }, function () {
             console.info("Bookmarks Updated Done");
+            if(detport!=null)
+                detport.postMessage({ "type": "action","content":"refresh"}); 
         });
     });
 };

@@ -1,7 +1,7 @@
 function rewritePage(url, startp) {
     let buf = fetchBuf(generateShortHash(url));
     if (buf == null) {
-        console.error('Invalid Page : '+url);
+        console.error('Invalid Page : ' + url);
         //        target = buf.content;
         return;
     }
@@ -35,16 +35,26 @@ function rewritePage(url, startp) {
     $('body').find('a').remove();
 
     //Navigation
+
     $('body').append('<div class="pnav" id="pup"></div>');
     $('body').append('<div class="pnav" id="pdown"></div>');
     var nv = $("<div id='nav'></div>");
-    nv.append("<span class='fetchprev left' style='cursor:pointer;' href='" + urlProceed(loadedContent[2][0].getAttribute('href')) + "'>" + "上一章" + "</span><span class='fetchnext right' style='cursor:pointer;' href='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'>" + "下一章" + "</span>");
+
+    // Only put when there is 'valid' next/prev link
+    if (loadedContent[2].length > 0) {
+        $('body').append("<iframe id='ppage' style='display:none;' src='" + urlProceed(loadedContent[2][0].getAttribute('href')) + "'></iframe>")
+        nv.append("<span class='fetchprev left' style='cursor:pointer;' href='" + urlProceed(loadedContent[2][0].getAttribute('href')) + "'>" + "上一章" + "</span>");
+    }
+    if (loadedContent[3].length > 0) {
+
+        $('body').append("<iframe id='npage' style='display:none;' src='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'></iframe>")
+        nv.append("<span class='fetchnext right' style='cursor:pointer;' href='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'>" + "下一章" + "</span>");
+    }
+
     $('body').append(nv);
     $('body').find('[style]').removeAttr('style');
     $('body').find('[onkeydown]').removeAttr('onkeydown');
 
-    $('body').append("<iframe id='npage' style='display:none;' src='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'></iframe>")
-    $('body').append("<iframe id='ppage' style='display:none;' src='" + urlProceed(loadedContent[2][0].getAttribute('href')) + "'></iframe>")
 
 
     // Go to top
@@ -141,7 +151,7 @@ function rewritePage(url, startp) {
             loadNextPage();
         }
         // pagedown;
-//        console.log(e.keyCode);
+        //        console.log(e.keyCode);
         if (e.keyCode == 32 || e.keyCode == 34 || e.keyCode == 40 || e.keyCode == 74) {
             //ascensorInstance.scrollToDirection('left');
             if (lastpage)

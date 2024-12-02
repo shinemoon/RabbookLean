@@ -158,20 +158,14 @@ function handleContent(bodytxt, url = null) {
 
     var cbody = dummy;
     var jres = judgePage(cbody);
-    // If there is still next page then let's load it.
-    // This is actually one recurve one.
-    if (jres[0]) {
+    //if (jres[0]) {    // Comment this to enable even single page action => For future read-it-later usage.
+    if (true) {
         cbody.find('iframe').remove();
         cbody.find('iframe').css('display', 'none!important');
-
         //To extract the content and navigations
         let loaded = parseContent(cbody);
-
-    //And update the bufarray
+        //And update the bufarray
         pushBuf({ 'key': generateShortHash(url), 'content': loaded});
-
-
-    
     }
 };
 
