@@ -71,7 +71,7 @@ function rewritePage(url, startp) {
                     detectBottom();
                 else
                     ascensorInstance.next();
-            } else if (event.key === "k" || event.key === "ArrowLeft" || event.keyy==="PageUp"){
+            } else if (event.key === "k" || event.key === "ArrowLeft" || event.key==="PageUp"){
                 ascensorInstance.prev();
             } else if (event.key === "l" || event.key=== "ArrowDown") {
                 rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;

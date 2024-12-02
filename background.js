@@ -194,7 +194,6 @@ function readPage(conf = null, targetTab = null) {
     function delayStop(func) {
         chrome.tabs.get(curtab.id, function (tb) {
             if (tb.status != "complete") {
-                chrome.tabs.executeScript(tb.id, { code: "window.stop();" }, function () { });
                 setTimeout(function () {
                     delayStop(func);
                 }, 1000);

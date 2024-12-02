@@ -18,9 +18,18 @@
 	},
 	"web_accessible_resources": [
 		{
-			"resources": ["font/font.ttf","main.css","main.js"],
-			"matches": ["<all_urls>"]
+			"resources": [
+				"font/font.ttf",
+				"main.css",
+				"main.js"
+			],
+			"matches": [
+				"<all_urls>"
+			]
 		}
+	],
+	"host_permissions": [
+		"<all_urls>"
 	],
 	"permissions": [
 		"tabs",
