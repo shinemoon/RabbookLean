@@ -1,19 +1,23 @@
 // service_worker.js
 var cntport = null;
-var detport = null;
+var detport = [];
+
+// Allowd url , only from bookmark page!
+var allowedurl = [];
 
 // 监听来自其他部分（如content script）的连接请求
 chrome.runtime.onConnect.addListener(function (port) {
     console.log("Connected with port:", port);
     // Initialize the connection action:
     // Action for ' Details Page Port"
+    // Mul-port supported
     if (port.name == 'detailspage') {
-        detport = port;
         // 可选：处理断开连接
-        detport.onDisconnect.addListener(function () {
-            detport = null;
+        port.onDisconnect.addListener(function () {
+            detport = detport.filter(p => p.sender.id !== port.sender.id);
             console.log("Detail Port disconnected");
         });
+        detport.push(port);
     }
 
     // Actions for 'Content Script Page Port'
@@ -96,8 +100,9 @@ function updateBookmarks(msg) {
         bklist.push({ rTitle: rTitle, cururl: cururl, curprog: curprog });
         chrome.storage.local.set({ 'bookmarks': bklist }, function () {
             console.info("Bookmarks Updated Done");
-            if(detport!=null)
-                detport.postMessage({ "type": "action","content":"refresh"}); 
+            detport.forEach(port => {
+                port.postMessage({ "type": "action", "content": "refresh" });
+            });
         });
     });
 };
