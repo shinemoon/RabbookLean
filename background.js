@@ -1,11 +1,12 @@
 // service_worker.js
 var popport = null;
 var cntport = null;
-var detport = [];
+//var detport = [];
+var detport = null;
 var config = null;
 
 // Allowd url , only from bookmark page!
-var allowedurl = [];
+var allowedurl = null;
 
 // Step1 Fetch the config!
 // Step2 Config the Port!
@@ -51,10 +52,18 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
         if (port.name == 'detailspage') {
             // 可选：处理断开连接
             port.onDisconnect.addListener(function () {
-                detport = detport.filter(p => p.sender.id !== port.sender.id);
+                //detport = detport.filter(p => p.sender.id !== port.sender.id);
+                detport = null;
                 console.log("Detail Port disconnected");
             });
-            detport.push(port);
+            //detport.push(port);
+            detport = port;
+            detport.onMessage.addListener(function (msg) {
+                console.log("Message received in Service Worker:", msg);
+                if (msg.type == "register") {
+                    allowedurl = msg.url; //注册网址，等待注入
+                }
+            });
         }
 
         // Actions for 'Content Script Page Port'
@@ -81,9 +90,13 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
                     bklist.push({ rTitle: msg.rTitle, cururl: msg.cururl, curprog: msg.curprog });
                     chrome.storage.local.set({ 'bookmarks': bklist }, function () {
                         console.info("Bookmarks Updated Done");
+                        if (detport != null)
+                            detport.postMessage({ "type": "action", "content": "refresh" });
+                        /*
                         detport.forEach(port => {
                             port.postMessage({ "type": "action", "content": "refresh" });
                         });
+                        */
                     });
                 }
             });
@@ -99,24 +112,17 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
 
     // 监听标签页更新事件
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-        // 确保页面加载完成
-        if (changeInfo.status === "complete" && tab.url) {
-            // 检查目标页面是否符合条件（这里以域名为例）
-            if (tab.url.includes("example.com")) {
-                console.log(`Injecting script into ${tab.url}`);
-
-                // 动态注入脚本
-                chrome.scripting.executeScript({
-                    target: { tabId: tabId },
-                    files: ["content-script.js"], // 指向需要注入的脚本文件
-                }, () => {
-                    if (chrome.runtime.lastError) {
-                        console.error("Script injection failed:", chrome.runtime.lastError.message);
-                    } else {
-                        console.log("Script injected successfully");
-                    }
-                });
-            }
+        // 确保页面加载完成, 并且必须是当前允许的这个网址
+        // TODO: 找到这两个tab的异同，解决问题
+        if (changeInfo.status === "complete" && tab.url == allowedurl) {
+            console.log(`Injecting script into ${tab.url}`);
+            // 使用 tabId 获取完整的 tab 信息
+            chrome.tabs.get(tabId, (fullTab) => {
+                console.log('Complete Tab info:', fullTab);
+                // 使用完整的 tab 对象执行你的逻辑
+                readPage(config, fullTab);
+                allowedurl = null;
+            });
         }
     });
 
