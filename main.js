@@ -24,9 +24,13 @@ var port;
 
 // 建立与 Service Worker 的连接
 function connectToBackground() {
-    port = chrome.runtime.connect({ name: "contpage" });
-
-    console.log("Connected to background script");
+    try {
+        port = chrome.runtime.connect({ name: "contpage" });
+        console.log("Connected to background script");
+    } catch (error) {
+        // 捕获异常后的处理代码
+        console.log("Not Connected");
+    }
 
     // 监听来自背景脚本的消息
     port.onMessage.addListener(function (msg) {
@@ -132,11 +136,11 @@ function handlePage(startp) {
 function handleContent(bodytxt, url = null) {
     console.log("handle content");
     // 先查找buffers有没有存好的! 如果已经解析过了，就不用去反复解析了 
-    console.log('url:'+url);
+    console.log('url:' + url);
     let buf = fetchBuf(generateShortHash(url));
     if (buf != null) {
         console.log('hit url');
-//        target = buf.content;
+        //        target = buf.content;
         return;
     }
 
@@ -165,7 +169,7 @@ function handleContent(bodytxt, url = null) {
         //To extract the content and navigations
         let loaded = parseContent(cbody);
         //And update the bufarray
-        pushBuf({ 'key': generateShortHash(url), 'content': loaded});
+        pushBuf({ 'key': generateShortHash(url), 'content': loaded });
     }
 };
 

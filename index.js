@@ -1,9 +1,34 @@
 var cururl = null;
 var css = null;
+var port = null;
+var reconnected = false;
+
+
+function connectToBackground() {
+    port = chrome.runtime.connect({ name: "popup" });
+    // 监听断开连接事件
+    port.onDisconnect.addListener(() => {
+        console.info("Disconnected from background script. Reconnecting...");
+        // 尝试重新连接
+        reconnected = true;
+        setTimeout(connectToBackground, 10); // 等待 0.01 秒后重连
+    });
+}
+
+//Connect port
+connectToBackground();
+
+
 
 $(document).ready(function () {
     $('#readpage').click(function () {
-        readPage();
+        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+            curtab = tabs[0];
+            console.log(curtab);
+            port.postMessage({ 'type': 'Inject', 'content': curtab});
+            window.close();
+        });
+
     });
 
     $('#bookmarktree').click(function () {
@@ -20,59 +45,8 @@ $(document).ready(function () {
                 // 否则，创建新页面
                 chrome.tabs.create({ url: targetUrl });
             }
-        });
-    });
-
-});
-
-
-function readPage() {
-    var curtab = null;
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        curtab = tabs[0];
-        console.log(curtab);
-        const rTitle = curtab.title;
-
-        delayStop(function () {
-            // 插入 CSS 文件
-            chrome.scripting.insertCSS({
-                target: { tabId: curtab.id },
-                files: ["main.css"]
-            });
-
-            // 如果 css 变量有值，插入 CSS 代码
-            if (css == null || css == "") {
-                console.log('no css');
-            } else {
-                chrome.scripting.insertCSS({
-                    target: { tabId: curtab.id },
-                    css: css
-                });
-            }
-
-            // 执行 JavaScript 文件
-            chrome.scripting.executeScript({
-                target: { tabId: curtab.id },
-                files: ["pre-main.js", "html-handling.js", "pageRewrite.js", "main.js"]
-            });
-
-            // 关闭窗口
             window.close();
         });
     });
 
-    function delayStop(func) {
-        chrome.tabs.get(curtab.id, function (tb) {
-            if (tb.status != "complete") {
-                chrome.tabs.executeScript(tb.id, { code: "window.stop();" }, function () { });
-                $('#readpage').html("Waiting");
-                setTimeout(function () {
-                    delayStop(func);
-                }, 1000);
-            } else {
-                $('#readpage').html("OK");
-                func();
-            }
-        });
-    };
-};
+});
