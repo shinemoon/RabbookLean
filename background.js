@@ -60,6 +60,29 @@ chrome.runtime.onConnect.addListener(function (port) {
 
 });
 
+// 监听标签页更新事件
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // 确保页面加载完成
+    if (changeInfo.status === "complete" && tab.url) {
+        // 检查目标页面是否符合条件（这里以域名为例）
+        if (tab.url.includes("example.com")) {
+            console.log(`Injecting script into ${tab.url}`);
+
+            // 动态注入脚本
+            chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ["content-script.js"], // 指向需要注入的脚本文件
+            }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error("Script injection failed:", chrome.runtime.lastError.message);
+                } else {
+                    console.log("Script injected successfully");
+                }
+            });
+        }
+    }
+});
+
 
 function updateBookmarks(msg) {
     let cururl = msg.cururl;

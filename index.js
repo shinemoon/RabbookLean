@@ -5,14 +5,29 @@ $(document).ready(function () {
     $('#readpage').click(function () {
         readPage();
     });
+
     $('#bookmarktree').click(function () {
-        chrome.tabs.create({ url: "details.html" });
+        const targetUrl = "details.html";
+
+        chrome.tabs.query({}, function (tabs) {
+            // 检查是否已经存在目标页面
+            const existingTab = tabs.find(tab => tab.url.includes(targetUrl));
+
+            if (existingTab) {
+                // 如果找到已有页面，则切换到该页面
+                chrome.tabs.update(existingTab.id, { active: true });
+            } else {
+                // 否则，创建新页面
+                chrome.tabs.create({ url: targetUrl });
+            }
+        });
     });
 
 });
 
+
 function readPage() {
-    var curtab=null;
+    var curtab = null;
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         curtab = tabs[0];
         console.log(curtab);
@@ -38,7 +53,7 @@ function readPage() {
             // 执行 JavaScript 文件
             chrome.scripting.executeScript({
                 target: { tabId: curtab.id },
-                files: ["pre-main.js","html-handling.js","pageRewrite.js","main.js"]
+                files: ["pre-main.js", "html-handling.js", "pageRewrite.js", "main.js"]
             });
 
             // 关闭窗口
