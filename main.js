@@ -26,7 +26,6 @@ var port;
 function connectToBackground() {
     try {
         port = chrome.runtime.connect({ name: "contpage" });
-        console.log("Connected to background script");
     } catch (error) {
         // 捕获异常后的处理代码
         console.log("Not Connected");
@@ -34,7 +33,7 @@ function connectToBackground() {
 
     // 监听来自背景脚本的消息
     port.onMessage.addListener(function (msg) {
-        console.log("Received message from background:", msg);
+        console.debug("Received message from background:", msg);
         //Log Print
         if (msg.type == 'cfg') {
             rflist = msg.flist;
@@ -134,9 +133,7 @@ function handlePage(startp) {
 
 // Handle the page content;
 function handleContent(bodytxt, url = null) {
-    console.log("handle content");
     // 先查找buffers有没有存好的! 如果已经解析过了，就不用去反复解析了 
-    console.log('url:' + url);
     let buf = fetchBuf(generateShortHash(url));
     if (buf != null) {
         console.log('hit url');
@@ -402,7 +399,7 @@ function generateShortHash(input) {
 
 // pushBuf 函数
 function pushBuf(inElem) {
-    console.debug("Trying to push: " + inElem);
+    console.debug("Trying to push: " + inElem.key);
     if (!inElem || !inElem.key) {
         console.error("Invalid input: inElem must have a 'key' field.");
         return;
@@ -427,7 +424,7 @@ function pushBuf(inElem) {
         buffers.shift(); // 删除第一个元素
         buffers.push(inElem); // 替换最后一个位置
     }
-    console.debug(inElem.content);
+   // console.debug(inElem.content);
 }
 
 

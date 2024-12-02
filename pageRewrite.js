@@ -53,7 +53,68 @@ function rewritePage(url, startp) {
 
     $('body').append(nv);
     $('body').find('[style]').removeAttr('style');
-    $('body').find('[onkeydown]').removeAttr('onkeydown');
+    // 清除全局绑定的键盘事件监听器
+    const eventTypes = ["keydown", "keypress", "keyup"];
+    const allowedKeys = new Set(["j", "k", "q", "l","h","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","PageUp","PageDown","Space", " "]); // 允许的按键
+
+    // 阻止所有按键事件的回调仅允许特定：
+    // 'j', 'Space': 下一页
+    // 'k', : 下一页
+    // ';'：下一章
+    const preventEvent = (event) => {
+        if (allowedKeys.has(event.key) && event.type === "keydown") {
+            console.info("Allow:" + event.type);
+            bindScrollAction();
+            // Next Page
+            if (event.key === "j" || event.key === "Space" || event.key === " " || event.key==="ArrowRight" || event.key==="PageDown") {
+                if (lastpage)
+                    detectBottom();
+                else
+                    ascensorInstance.next();
+            } else if (event.key === "k" || event.key === "ArrowLeft" || event.keyy==="PageUp"){
+                ascensorInstance.prev();
+            } else if (event.key === "l" || event.key=== "ArrowDown") {
+                rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
+                $('.fetchnext').click();
+            } else if (event.key === "h" || event.key=== "ArrowUp") {
+                rTitle = document.getElementById('ppage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
+                $('.fetchprev').click();
+            } else if (event.key === "q") {
+                // Go to floor
+                var tofloor = prompt("请输入跳转页数", "");
+                if (tofloor < 1 || tofloor > pages) {
+                    if (tofloor < 1) {
+                        ascensorInstance.scrollToFloor(0);
+                    }
+                    if (tofloor > pages) {
+                        ascensorInstance.scrollToFloor(pages - 1);
+                    }
+                } else {
+                    ascensorInstance.scrollToFloor(parseInt(tofloor) - 1);
+                }
+            }
+        }
+        event.stopPropagation(); // 阻止事件冒泡
+        event.preventDefault(); // 阻止默认行为（如键盘快捷键）
+        event.stopImmediatePropagation(); // 阻止后续事件触发
+    };
+
+    // 为所有按键事件添加覆盖处理
+    eventTypes.forEach(type => {
+        // 移除之前添加的监听器（如果有）
+        window.removeEventListener(type, preventEvent, true);
+        // 捕获阶段阻止事件
+        window.addEventListener(type, preventEvent, true);
+    });
+
+
+
+    /* 
+        Handle page actions : keyup/click
+    */
+    $(document).unbind('click').bind('click', function (e) {
+        bindClickPress(e);
+    });
 
 
 
@@ -79,21 +140,7 @@ function rewritePage(url, startp) {
         loadPrevPage();
     });
 
-
-    /* 
-        Handle page actions : keyup/click
-    */
-    $(document).unbind('keyup').bind('keyup', function (e) {
-        bindClickPress(e);
-    });
-
-    $(document).unbind('click').bind('click', function (e) {
-        bindClickPress(e);
-    });
-
-
-
-    function bindClickPress(e) {
+    function bindScrollAction(tout=false) {
         /*
         //Bind the scrollevent
         */
@@ -109,13 +156,21 @@ function rewritePage(url, startp) {
             } catch (error) {
                 console.error("Port is disconnected", error);
             }
+            if (tout)
+                pgtimer = window.setTimeout(function () {
+                    notinpaging = true;
+                }, PGTIME);
         });
-
         ascensor.on("scrollStart", function (e, floor) {
             lastpage = false;
+            if(tout)
+                notinpaging = false;
         });
 
+    }
 
+    function bindClickPress(e) {
+        bindScrollAction();
         // Page Turn Navigator Click
         //
         $('#pup').unbind('click').bind('click', function () {
@@ -129,43 +184,6 @@ function rewritePage(url, startp) {
                 ascensorInstance.next();
         });
 
-        //;
-        // Go to floor
-        if (e.keyCode == 81) {
-            var tofloor = prompt("请输入跳转页数", "")
-            if (tofloor < 1 || tofloor > pages) {
-                if (tofloor < 1) {
-                    ascensorInstance.scrollToFloor(0);
-                }
-                if (tofloor > pages) {
-                    ascensorInstance.scrollToFloor(pages - 1);
-                }
-            } else {
-                ascensorInstance.scrollToFloor(parseInt(tofloor) - 1);
-            }
-        }
-
-
-        if (e.keyCode == 186) {
-            rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
-            loadNextPage();
-        }
-        // pagedown;
-        //        console.log(e.keyCode);
-        if (e.keyCode == 32 || e.keyCode == 34 || e.keyCode == 40 || e.keyCode == 74) {
-            //ascensorInstance.scrollToDirection('left');
-            if (lastpage)
-                detectBottom();
-            else
-                ascensorInstance.next();
-        };
-
-        // pageup;
-        if (e.keyCode == 33 || e.keyCode == 75) {
-            //ascensorInstance.scrollToDirection('right');
-            ascensorInstance.prev();
-        };
-
     };
 
 
@@ -175,30 +193,7 @@ function rewritePage(url, startp) {
         /*
         //Bind the scrollevent
         */
-        ascensor.on("scrollEnd", function (e, floor) {
-            if (floor.to == $('.bb-item').length - 1) {
-                lastpage = true;
-            }
-            $('#currentindex').text(parseInt(floor.to) + 1);
-            $('#totalindex').text(pages);
-            progress = (floor.to) / pages;
-            try {
-                port.postMessage({ type: "updatebk", rTitle: rTitle, cururl: cururl, progress: progress });
-            } catch (error) {
-                console.error("Port is disconnected", error);
-            }
-
-            pgtimer = window.setTimeout(function () {
-                notinpaging = true;
-            }, PGTIME);
-        });
-
-        ascensor.on("scrollStart", function (e, floor) {
-            lastpage = false;
-            notinpaging = false;
-        });
-
-
+       bindScrollAction(true);
 
         var delta = e.offsetY - lastY;
         scrollCnt = scrollCnt + 1;
@@ -304,7 +299,7 @@ function rewritePage(url, startp) {
     // 重新生成以及打断字符段落
     // 定义存储结果的新数组
     var sortedlines = [];
-    console.info("LINECNT:" + linecnt + " CHCNT:" + chcnt);
+    console.debug("Line Count: " + linecnt + "; Every Line: " + chcnt);
 
     // 遍历每一段内容
     newlines.forEach(line => {
