@@ -70,7 +70,7 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
                                 // 如果找到已有页面，则切换到该页面
                                 chrome.tabs.update(existingTab.id, { active: true });
                                 // 然后试图获取当前window开始注入
-                                chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+                                chrome.tabs.query({ active: true}, function (tabs) {
                                     curtab = tabs[0];
                                     console.log(curtab);
                                     readPage(config, curtab);
