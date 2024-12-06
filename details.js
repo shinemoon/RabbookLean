@@ -63,10 +63,17 @@ connectToBackground();
 
 $(document).ready(function () {
     refreshDetailsPage();
+    // Version Update
+    // Get the manifest object
+    const manifest = chrome.runtime.getManifest();
+
+    // Access the manifest version
+    const manifestVersion = manifest.manifest_version;
+    $('#verid').html(manifestVersion);
 });
 
 function refreshDetailsPage() {
-    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [], 'twocolumn': true}, function (result) {
+    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [], 'twocolumn': true }, function (result) {
         clist = result.clist;
         tlist = result.tlist;
         plist = result.plist;
@@ -132,7 +139,7 @@ function displayPage() {
         });
         //Open and injection
         // Let's register this one and try to inject?
-        port.postMessage({ type: "register", url:$(this).attr('href')});
+        port.postMessage({ type: "register", url: $(this).attr('href') });
         window.location = $(this).attr('href');
     });
 
