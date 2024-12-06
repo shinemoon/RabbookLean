@@ -68,7 +68,7 @@ $(document).ready(function () {
     const manifest = chrome.runtime.getManifest();
 
     // Access the manifest version
-    const manifestVersion = manifest.manifest_version;
+    const manifestVersion = manifest.version;
     $('#verid').html(manifestVersion);
 });
 
