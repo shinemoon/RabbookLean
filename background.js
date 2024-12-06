@@ -11,7 +11,7 @@ var allowedurl = null;
 // Step1 Fetch the config!
 // Step2 Config the Port!
 // Step3 Config the background monitor action!
-chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": false, "css": null, "js": null }, function (r) {
+chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "js": null }, function (r) {
     /* 配置说明 */
     /*
     "clist": [], 自定义内容选择符列表

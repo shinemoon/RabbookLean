@@ -86,7 +86,6 @@ var scrollCnt = 0;
 var reachBottom = false;
 var toBottom = 200;
 var toBottom_d = 0;
-var lastpage = false;
 var bktitle = "N.N";
 
 
@@ -173,7 +172,6 @@ function handleContent(bodytxt, url = null) {
 
 
 function loadPrevPage() {
-    lastpage = false;
     window.clearTimeout(pgtimer);
     notinpaging = false;
     // Get content from iframe
@@ -185,7 +183,6 @@ function loadPrevPage() {
     }, PGTIME);
 };
 function loadNextPage() {
-    lastpage = false;
     window.clearTimeout(pgtimer);
     notinpaging = false;
     // Get content from iframe

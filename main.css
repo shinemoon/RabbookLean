@@ -114,10 +114,14 @@ body {
 }
 .bb-item.two-column-item .column {
   width: 50%;
-  margin-left: 20px;
 }
 .bb-item.two-column-item .column.left-page {
+  margin-left: 40px;
   border-right: #AAA dotted 1px;
+  padding-right: 20px;
+}
+.bb-item.two-column-item .column.right-page {
+  padding-left: 40px;
 }
 
 .container,

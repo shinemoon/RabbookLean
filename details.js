@@ -66,7 +66,7 @@ $(document).ready(function () {
 });
 
 function refreshDetailsPage() {
-    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [], 'twocolumn': false }, function (result) {
+    chrome.storage.local.get({ 'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [], 'dir': false, 'css': null, 'js': null, 'bookmarks': [], 'twocolumn': true}, function (result) {
         clist = result.clist;
         tlist = result.tlist;
         plist = result.plist;
@@ -287,5 +287,3 @@ function displayPage() {
         }
     });
 }; // End of displayPage
-
-//TODO: 书签的处理需要思考

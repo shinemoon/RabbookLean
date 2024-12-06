@@ -1,3 +1,7 @@
+function lastpage() {
+    return $("#currentindex").text() == $("#totalindex").text();
+}
+
 function rewritePage(url, startp) {
     let buf = fetchBuf(generateShortHash(url));
     if (buf == null) {
@@ -55,7 +59,7 @@ function rewritePage(url, startp) {
     $('body').find('[style]').removeAttr('style');
     // 清除全局绑定的键盘事件监听器
     const eventTypes = ["keydown", "keypress", "keyup"];
-    const allowedKeys = new Set(["j", "k", "q", "l","h","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","PageUp","PageDown","Space", " "]); // 允许的按键
+    const allowedKeys = new Set(["j", "k", "q", "l", "h", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Space", " "]); // 允许的按键
 
     // 阻止所有按键事件的回调仅允许特定：
     // 'j', 'Space': 下一页
@@ -66,17 +70,17 @@ function rewritePage(url, startp) {
             console.info("Allow:" + event.type);
             bindScrollAction();
             // Next Page
-            if (event.key === "j" || event.key === "Space" || event.key === " " || event.key==="ArrowRight" || event.key==="PageDown") {
-                if (lastpage)
+            if (event.key === "j" || event.key === "Space" || event.key === " " || event.key === "ArrowRight" || event.key === "PageDown") {
+                if (lastpage())
                     detectBottom();
                 else
                     ascensorInstance.next();
-            } else if (event.key === "k" || event.key === "ArrowLeft" || event.key==="PageUp"){
+            } else if (event.key === "k" || event.key === "ArrowLeft" || event.key === "PageUp") {
                 ascensorInstance.prev();
-            } else if (event.key === "l" || event.key=== "ArrowDown") {
+            } else if (event.key === "l" || event.key === "ArrowDown") {
                 rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
                 $('.fetchnext').click();
-            } else if (event.key === "h" || event.key=== "ArrowUp") {
+            } else if (event.key === "h" || event.key === "ArrowUp") {
                 rTitle = document.getElementById('ppage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
                 $('.fetchprev').click();
             } else if (event.key === "q") {
@@ -140,14 +144,11 @@ function rewritePage(url, startp) {
         loadPrevPage();
     });
 
-    function bindScrollAction(tout=false) {
+    function bindScrollAction(tout = false) {
         /*
         //Bind the scrollevent
         */
         ascensor.on("scrollEnd", function (e, floor) {
-            if (floor.to == $('.bb-item').length - 1) {
-                lastpage = true;
-            }
             $('#currentindex').text(parseInt(floor.to) + 1);
             $('#totalindex').text(pages);
             progress = (floor.to) / pages;
@@ -162,8 +163,7 @@ function rewritePage(url, startp) {
                 }, PGTIME);
         });
         ascensor.on("scrollStart", function (e, floor) {
-            lastpage = false;
-            if(tout)
+            if (tout)
                 notinpaging = false;
         });
 
@@ -178,7 +178,7 @@ function rewritePage(url, startp) {
         });
 
         $('#pdown').unbind('click').bind('click', function () {
-            if (lastpage)
+            if (lastpage())
                 detectBottom();
             else
                 ascensorInstance.next();
@@ -193,7 +193,7 @@ function rewritePage(url, startp) {
         /*
         //Bind the scrollevent
         */
-       bindScrollAction(true);
+        bindScrollAction(true);
 
         var delta = e.offsetY - lastY;
         scrollCnt = scrollCnt + 1;
@@ -205,7 +205,7 @@ function rewritePage(url, startp) {
                 scrollCnt = 0;
                 if (sumDelta < 4) {
                     sumDelta = 0;
-                    if (lastpage)
+                    if (lastpage())
                         detectBottom();
                     else
                         ascensorInstance.next();
@@ -249,6 +249,8 @@ function rewritePage(url, startp) {
 
     // Refine the text
     var wwidth = $(window).width();
+    //var wheight = $(window).height() - 120;
+    // To make more wise calculation
     var wheight = $(window).height() - 120;
 
     var expectwidth = rtwocolumn ? 1280 : 960; // Default central colume = 960px;
@@ -265,7 +267,7 @@ function rewritePage(url, startp) {
     $('#gnContent').html(linerized.join(''));
 
 
-    var lheight = parseInt($('p').outerHeight(true));
+    var lheight = parseInt($('p').outerHeight(true)) + 1;
     var fwidth = parseInt($('p').css('font-size'));
     //console.info("Line Height:" + $('p').outerHeight(true));
 
@@ -273,7 +275,7 @@ function rewritePage(url, startp) {
     //每行字数
     var chcnt;
     if (rtwocolumn) {
-        chcnt = parseInt((expectwidth - 360) / fwidth);
+        chcnt = parseInt((expectwidth - 400) / fwidth);
         chcnt = parseInt(chcnt / 2);
     } else {
         chcnt = parseInt((expectwidth - 20) / fwidth);
@@ -412,3 +414,4 @@ function detectBottom(e) {
     }
 
 }
+
