@@ -62,9 +62,6 @@ function rewritePage(url, startp) {
     const allowedKeys = new Set(["j", "k", "q", "l", "h", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Space", " "]); // 允许的按键
 
     // 阻止所有按键事件的回调仅允许特定：
-    // 'j', 'Space': 下一页
-    // 'k', : 下一页
-    // ';'：下一章
     const preventEvent = (event) => {
         if (allowedKeys.has(event.key) && event.type === "keydown") {
             console.info("Allow:" + event.type);
@@ -383,7 +380,7 @@ function rewritePage(url, startp) {
     $('#gnContent').show();
 
 
-    $('body').append("<div id='hint'>';':下一章  'q':跳转页面 </div>");
+    $('body').append("<div id='hint'> 'q':跳转页面 </div>");
     setTimeout(function () {
         $('#hint').hide();
     }, 2000);
