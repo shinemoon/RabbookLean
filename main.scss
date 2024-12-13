@@ -75,6 +75,32 @@ body {
     }
 }
 
+#tools {
+    position: fixed !important;
+    right: 0px;
+    bottom: 50px;
+    width: 70px;
+    height: 60%;
+    display: flex;
+    justify-content: space-between;
+
+    span {
+        text-decoration: none;
+        margin-bottom: 20px;
+        color: $dark-grey;
+        background: $white;
+        padding-right: 20px;
+        padding-left: 15px;
+        padding-top: 5px;
+        padding-bottom: 5px;
+        width: 60px;
+        cursor: pointer;
+        &:hover {
+            opacity:0.6;
+        }
+    }
+}
+
 #nav {
     position: fixed !important;
     right: 0;
@@ -104,6 +130,7 @@ body {
         &.right {
             border-left: 2px solid green;
             text-align: right;
+
             &:hover {
                 cursor: pointer;
                 border-left: 2px solid $green;
@@ -113,6 +140,7 @@ body {
         &.left {
             border-right: 2px solid green;
             text-align: left;
+
             &:hover {
                 cursor: pointer;
                 border-right: 2px solid $green;
@@ -140,6 +168,7 @@ body {
                 border-right: #AAA dotted 1px;
                 padding-right: 20px;
             }
+
             &.right-page {
                 padding-left: 40px;
             }

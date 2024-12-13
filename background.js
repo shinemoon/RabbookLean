@@ -8,6 +8,9 @@ var config = null;
 // Allowd url , only from bookmark page!
 var allowedurl = null;
 
+// From Details page injection
+var fromDetails = false;
+
 // Step1 Fetch the config!
 // Step2 Config the Port!
 // Step3 Config the background monitor action!
@@ -40,47 +43,66 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
             popport.onMessage.addListener(function (msg) {
                 console.log("Message received in Service Worker:", msg);
                 if (msg.type == "Inject") {
+                    fromDetails = false; // 覆盖掉可能存在的从书签引发的注入请求 
                     // To Inject from serviced worker
                     readPage(config, msg.content);
                 }
             });
         }
 
+        function tryInjectScript(config, allowedurl) {
+            // 延时检查是否加载成功
+            const checkInterval = 2000; // 2秒
+            chrome.tabs.query({}, function (tabs) {
+                // 检查是否已经存在目标页面
+                const existingTab = tabs.find(tab => tab.url.includes(allowedurl));
+                if (existingTab) {
+                    console.log("Got Page Existed");
+                    // 如果找到已有页面，则切换到该页面
+                    chrome.tabs.update(existingTab.id, { active: true }, function () {
+                        // 然后试图获取当前window开始注入
+                        chrome.tabs.query({ active: true, currentWindow: true }, function (activeTabs) {
+                            const curtab = activeTabs[0];
+                            console.log(curtab);
+                            if (curtab) {
+                                readPage(config, curtab); // 调用注入脚本的函数
+                            } else {
+                                console.error("Failed to get the active tab.");
+                            }
+                        });
+                    });
+                } else {
+                    console.log("Page not yet loaded.");
+                    if (fromDetails) {
+                        // 如果指定了循环检查，则继续尝试
+                        setTimeout(() => tryInjectScript(config, allowedurl), checkInterval);
+                    }
+                }
+            });
+        }
 
         // Action for ' Details Page Port"
         // Mul-port supported
         if (port.name == 'detailspage') {
-            // 可选：处理断开连接
-            port.onDisconnect.addListener(function () {
-                //detport = detport.filter(p => p.sender.id !== port.sender.id);
-                detport = null;
-                console.log("Detail Port disconnected");
-            });
-            //detport.push(port);
-            detport = port;
-            detport.onMessage.addListener(function (msg) {
-                console.log("Message received in Service Worker:", msg);
-                if (msg.type == "register") {
-                    allowedurl = msg.url; //注册网址，等待注入
-                    setTimeout(function () {
-                        chrome.tabs.query({}, function (tabs) {
-                            // 检查是否已经存在目标页面
-                            const existingTab = tabs.find(tab => tab.url.includes(allowedurl));
-                            if (existingTab) {
-                                // 如果找到已有页面，则切换到该页面
-                                chrome.tabs.update(existingTab.id, { active: true });
-                                // 然后试图获取当前window开始注入
-                                chrome.tabs.query({ active: true}, function (tabs) {
-                                    curtab = tabs[0];
-                                    console.log(curtab);
-                                    readPage(config, curtab);
-                                });
-                            } else {
-                                //chrome.tabs.create({ url: targetUrl });
-                            }
-                        });
-                    }, 100);
-                }
+            // 每次连接配置页面，重新load一次配置
+            chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "js": null }, function (r) {
+                config = r;
+                // 可选：处理断开连接
+                port.onDisconnect.addListener(function () {
+                    //detport = detport.filter(p => p.sender.id !== port.sender.id);
+                    detport = null;
+                    console.log("Detail Port disconnected");
+                });
+                //detport.push(port);
+                detport = port;
+                detport.onMessage.addListener(function (msg) {
+                    console.log("Message received in Service Worker:", msg);
+                    if (msg.type == "register") {
+                        fromDetails = true;
+                        allowedurl = msg.url; //注册网址，等待注入
+                        tryInjectScript(config, allowedurl);
+                    }
+                });
             });
         }
 
@@ -162,7 +184,7 @@ function readPage(conf = null, targetTab = null) {
             // 插入 CSS 文件
             chrome.scripting.insertCSS({
                 target: { tabId: tabIn.id },
-                files: ["main.css"]
+                files: ["main.css", "font/style.css"]
             });
 
             // 如果 css 变量有值，插入 CSS 代码

@@ -23,6 +23,22 @@ function rewritePage(url, startp) {
     var fontstr = "@font-face {font-family: 'Kesong';src: url('" + fontpath + "/font.ttf') format('truetype');}";
     $('body').append('<style>' + fontstr + '</style>');
 
+    fontpath = fontpath + "/fonts"; // 定义字体文件路径
+    fontstr = `
+@font-face {
+    font-family: 'icomoon';
+    src: url('${fontpath}/icomoon.eot?cmcz0s');
+    src: url('${fontpath}/icomoon.eot?cmcz0s#iefix') format('embedded-opentype'),
+         url('${fontpath}/icomoon.ttf?cmcz0s') format('truetype'),
+         url('${fontpath}/icomoon.woff?cmcz0s') format('woff'),
+         url('${fontpath}/icomoon.svg?cmcz0s#icomoon') format('svg');
+    font-weight: normal;
+    font-style: normal;
+    font-display: block;
+}`;
+
+
+    $('body').append('<style>' + fontstr + '</style>');
 
     //Title
     $('body').append('<div id="lrbk_title"></div>');
@@ -53,9 +69,12 @@ function rewritePage(url, startp) {
 
         $('body').append("<iframe id='npage' style='display:none;' src='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'></iframe>")
         nv.append("<span class='fetchnext right' style='cursor:pointer;' href='" + urlProceed(loadedContent[3][0].getAttribute('href')) + "'>" + "下一章" + "</span>");
+
     }
 
     $('body').append(nv);
+    $('body').append("<div id='tools'><span class='switch icon-toggle-on' > </span></div>");
+    
     $('body').find('[style]').removeAttr('style');
     // 清除全局绑定的键盘事件监听器
     const eventTypes = ["keydown", "keypress", "keyup"];

@@ -19,7 +19,12 @@
 	"web_accessible_resources": [
 		{
 			"resources": [
+				"font/fonts/icomoon.eot",
+				"font/fonts/icomoon.ttf",
+				"font/fonts/icomoon.woff",
+				"font/fonts/icomoon.svg",
 				"font/font.ttf",
+				"font/style.css",
 				"main.css",
 				"main.js"
 			],

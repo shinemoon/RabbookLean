@@ -57,6 +57,31 @@ body {
   color: #222222 !important;
 }
 
+#tools {
+  position: fixed !important;
+  right: 0px;
+  bottom: 50px;
+  width: 70px;
+  height: 60%;
+  display: flex;
+  justify-content: space-between;
+}
+#tools span {
+  text-decoration: none;
+  margin-bottom: 20px;
+  color: #333333;
+  background: #ffffff;
+  padding-right: 20px;
+  padding-left: 15px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  width: 60px;
+  cursor: pointer;
+}
+#tools span:hover {
+  opacity: 0.6;
+}
+
 #nav {
   position: fixed !important;
   right: 0;
