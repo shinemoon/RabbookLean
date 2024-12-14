@@ -1,3 +1,4 @@
+
 function lastpage() {
     return $("#currentindex").text() == $("#totalindex").text();
 }
@@ -73,8 +74,9 @@ function rewritePage(url, startp) {
     }
 
     $('body').append(nv);
-    $('body').append("<div id='tools'><span class='switch icon-toggle-on' > </span></div>");
-    
+    $('body').append("<div id='tools'><span id ='switch' class='icon-toggle-on' > </span></div>");
+    toggleNightMode(inNight);
+
     $('body').find('[style]').removeAttr('style');
     // 清除全局绑定的键盘事件监听器
     const eventTypes = ["keydown", "keypress", "keyup"];
@@ -140,6 +142,31 @@ function rewritePage(url, startp) {
 
     // Go to top
     window.scrollTo(0, 0);
+    // 切换
+    function toggleNightMode(enable) {
+        const body = document.body;
+        if (enable) {
+            body.style.filter = "invert(0.8) hue-rotate(180deg)";
+            $('#switch').removeClass("icon-toggle-on").addClass("icon-toggle-off");
+        } else {
+            body.style.filter = "none";
+            $('#switch').removeClass("icon-toggle-off").addClass("icon-toggle-on");
+        }
+        // Send update
+        port.postMessage({ type: "configupdate", innight:inNight});
+
+    }
+
+    // Switch day/night
+    $('#switch').unbind('click').bind('click', function () {
+        if ($(this).hasClass("icon-toggle-on")) {
+            inNight = true;
+        } else {
+            inNight = false;
+        }
+        toggleNightMode(inNight);
+    });
+
     //For next page's info
     $('.fetchnext').unbind('click').bind('click', function () {
         reachBottom = false;

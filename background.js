@@ -14,7 +14,7 @@ var fromDetails = false;
 // Step1 Fetch the config!
 // Step2 Config the Port!
 // Step3 Config the background monitor action!
-chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "js": null }, function (r) {
+chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null }, function (r) {
     /* 配置说明 */
     /*
     "clist": [], 自定义内容选择符列表
@@ -85,7 +85,7 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
         // Mul-port supported
         if (port.name == 'detailspage') {
             // 每次连接配置页面，重新load一次配置
-            chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "js": null }, function (r) {
+            chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null }, function (r) {
                 config = r;
                 // 可选：处理断开连接
                 port.onDisconnect.addListener(function () {
@@ -109,7 +109,7 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
         // Actions for 'Content Script Page Port'
         if (port.name == 'contpage') {
             cntport = port;
-            cntport.postMessage({ "type": "cfg", "clist": config.clist, "flist": config.flist, "plist": config.plist, "nlist": config.nlist, "dir": config.dir, "twocolumn": config.twocolumn, "tlist": config.tlist, "css": config.css, "js": config.js });
+            cntport.postMessage({ "type": "cfg", "clist": config.clist, "flist": config.flist, "plist": config.plist, "nlist": config.nlist, "dir": config.dir, "twocolumn": config.twocolumn, "tlist": config.tlist, "css": config.css, "js": config.js,"innight":config.innight });
             // 发送完配置后，理论上就Go了
             // TODO: Progress passing
             cntport.postMessage({ "type": "go", "progress": null });
@@ -117,6 +117,11 @@ chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [
             //  用来更新书签
             cntport.onMessage.addListener(function (msg) {
                 console.log("Message received in Service Worker:", msg);
+                if (msg.type == "configupdate") {
+                    chrome.storage.local.set({ 'innight': msg.innight}, function () {
+                        console.log("Refresh config updated from content page");
+                    });
+                };
                 if (msg.type == "updatebk") {
                     // To update bookmark in serviced worker
                     bklist = config.bookmarks;

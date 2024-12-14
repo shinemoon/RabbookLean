@@ -22,6 +22,7 @@ var target = null;
 var port;
 
 
+
 // 建立与 Service Worker 的连接
 function connectToBackground() {
     try {
@@ -44,6 +45,7 @@ function connectToBackground() {
             rdir = msg.dir;
             rtwocolumn = msg.twocolumn;
             rjs = msg.js;
+            inNight = msg.innight;
         };
         if (msg.type == "go" && reconnected == false) {
             if (msg.progress != null) {
@@ -80,6 +82,9 @@ var rjs = null;
 var lastY = 0;
 var sumDelta = 0;
 var scrollCnt = 0;
+
+
+var inNight = false;
 
 // Page elements
 //To detect bottom reach event
@@ -421,7 +426,7 @@ function pushBuf(inElem) {
         buffers.shift(); // 删除第一个元素
         buffers.push(inElem); // 替换最后一个位置
     }
-   // console.debug(inElem.content);
+    // console.debug(inElem.content);
 }
 
 
