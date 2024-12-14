@@ -1,9 +1,9 @@
 ﻿{
 	"name": "LeanRabbook",
-	"version": "2.0",
+	"version": "2.1",
 	"description": "Auto Parser of Novel",
 	"short_name": "LRabook",
-	"manifest_version": 3.1,
+	"manifest_version": 3,
 	"icons": {
 		"48": "images/icon.png",
 		"128": "images/icon.png"
