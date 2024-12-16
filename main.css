@@ -60,9 +60,9 @@ body {
 #tools {
   position: fixed !important;
   right: 0px;
-  bottom: 50px;
+  bottom: 50%;
   width: 70px;
-  height: 60%;
+  height: 40px;
   display: flex;
   justify-content: space-between;
 }
