@@ -5,28 +5,37 @@
 	"short_name": "LRabook",
 	"manifest_version": 3,
 	"icons": {
-		"48": "images/icon.png",
-		"128": "images/icon.png"
+		"48": "src/images/icon.png",
+		"128": "src/images/icon.png"
 	},
 	"action": {
-		"default_icon": "images/icon.png",
-		"default_popup": "index.html",
+		"default_icon": "src/images/icon.png",
+		"default_popup": "src/index.html",
 		"default_title": "RabbookLean"
 	},
 	"background": {
-		"service_worker": "background.js"
+		"service_worker": "src/background.js"
 	},
 	"web_accessible_resources": [
 		{
 			"resources": [
-				"font/fonts/icomoon.eot",
-				"font/fonts/icomoon.ttf",
-				"font/fonts/icomoon.woff",
-				"font/fonts/icomoon.svg",
-				"font/font.ttf",
-				"font/style.css",
-				"main.css",
-				"main.js"
+				"src/font/fonts/icomoon.eot",
+				"src/font/fonts/icomoon.ttf",
+				"src/font/fonts/icomoon.woff",
+				"src/font/fonts/icomoon.svg",
+				"src/font/font.ttf",
+				"src/font/style.css",
+				"src/main.css",
+				"src/main.js",
+				"src/pre-main.js",
+				"src/details.html",
+				"src/details.css",
+				"src/details.js",
+				"src/html-handling.js",
+        "src/pageRewrite.js",
+        "src/jquery.js",
+        "src/reader-frame.html",
+        "src/reader-frame.js"
 			],
 			"matches": [
 				"<all_urls>"

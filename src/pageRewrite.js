@@ -1,3 +1,12 @@
+// 守卫检查：如果当前页面是 about:blank 或 chrome:// 等受限页面，直接返回
+(function() {
+    var protocol = window.location.protocol;
+    if (protocol === 'about:' || protocol === 'chrome:' || protocol === 'edge:' || protocol === 'chrome-extension:' || protocol === 'data:' || protocol === 'devtools:') {
+        console.warn('pageRewrite: cannot run on restricted page:', window.location.href);
+        // 抛出一个可被 catch 的错误，让调用方知道执行被阻止
+        throw new Error('pageRewrite blocked on restricted page');
+    }
+})();
 
 function lastpage() {
     return $("#currentindex").text() == $("#totalindex").text();
@@ -20,7 +29,7 @@ function rewritePage(url, startp) {
     $('body').empty();
     //    $('body').attr('style','');
     $('body').attr('style', '');
-    var fontpath = chrome.runtime.getURL('/font');
+    var fontpath = chrome.runtime.getURL('src/font');
     var fontstr = "@font-face {font-family: 'Kesong';src: url('" + fontpath + "/font.ttf') format('truetype');}";
     $('body').append('<style>' + fontstr + '</style>');
 
@@ -77,7 +86,32 @@ function rewritePage(url, startp) {
     $('body').append("<div id='tools'><span id ='switch' class='icon-toggle-on' > </span></div>");
     toggleNightMode(inNight);
 
-    $('body').find('[style]').removeAttr('style');
+    $('body').find('[style]').not('#ppage, #npage').removeAttr('style');
+
+    // === 增强清理：清除原始页面的残留 ===
+    // 清除所有定时器
+    var highestTimerId = window.setTimeout(function(){}, 0);
+    for (var i = 0; i <= highestTimerId; i++) {
+        window.clearTimeout(i);
+        window.clearInterval(i);
+    }
+    // 移除 head 中残留的 link/style/script 标签（保留扩展自身注入的）
+    $('head').find('link, style, script').not('[src*="main.css"], [src*="main.js"], [src*="pageRewrite"]').remove();
+    // 移除 body 中可能残留的 link/script/style/iframe（排除 ppage/npage）
+    $('body').find('link, script, style, noscript, iframe:not(#ppage, #npage)').remove();
+    // 重新确保 ppage/npage iframe 隐藏（上述清理可能间接影响其 display:none）
+    $('#ppage').css('display', 'none');
+    $('#npage').css('display', 'none');
+    // 清除所有内联事件属性，防止残留 JS 干扰
+    // jQuery removeAttr() 一次只接受一个属性名，需逐个清理
+    var inlineAttrs = ['onclick','onmouseover','onmouseout','onkeydown','onkeyup','onsubmit','onchange','onfocus','onblur','onload','onerror','onmousedown','onmouseup','ondblclick','oncontextmenu','onwheel','ontouchstart','ontouchend','ontouchmove','onpointerdown','onpointermove','onpointerup'];
+    $('body').find('*').each(function() {
+        var $el = $(this);
+        for (var a = 0; a < inlineAttrs.length; a++) {
+            $el.removeAttr(inlineAttrs[a]);
+        }
+    });
+
     // 清除全局绑定的键盘事件监听器
     const eventTypes = ["keydown", "keypress", "keyup"];
     const allowedKeys = new Set(["j", "k", "q", "l", "h", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Space", " "]); // 允许的按键
@@ -290,11 +324,21 @@ function rewritePage(url, startp) {
 
 
 
+    // 在内容重置前保存容器高度（之后 #gnContent 会被 hide，height() 返回 0）
+    var gnContentHeight = $('#gnContent').height();
+
+    // 从原始内容中剥离所有内联事件属性，防止残留 onclick 跳广告
+    (function stripInlineEvents(htmlStr) {
+        if (!htmlStr) return;
+        for (var i = 0; i < htmlStr.length; i++) {
+            if (typeof htmlStr[i] === 'string') {
+                htmlStr[i] = htmlStr[i].replace(/ on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+            }
+        }
+    })(loadedContent[4]);
+
     // Refine the text
     var wwidth = $(window).width();
-    //var wheight = $(window).height() - 120;
-    // To make more wise calculation
-    var wheight = $(window).height() - 120;
 
     var expectwidth = rtwocolumn ? 1280 : 960; // Default central colume = 960px;
     // Calculate the padding ;
@@ -305,14 +349,23 @@ function rewritePage(url, startp) {
     var curContent = loadedContent[4];
 
 
+    // 测量行高：相邻两个 <p> 的 offsetTop 差 = lineHeight + 折叠后的 margin
+    // outerHeight(true) 会将上下边距重复累加（16+16=32px），但实际渲染中 margin 会折叠（仅保留 16px），
+    // 因此用 offsetTop 差才能反映真实的每行占用高度
+    var $tempWrapper = $('<div class="bb-item" style="position:absolute;visibility:hidden;left:-9999px;overflow:hidden;"></div>').appendTo('body');
+    var $tempP1 = $('<p class="fake-p">测</p>').appendTo($tempWrapper);
+    var $tempP2 = $('<p class="fake-p">测</p>').appendTo($tempWrapper);
+    var lheight = $tempP2[0].offsetTop - $tempP1[0].offsetTop + 1; // +1 防止最后一行被 overflow:hidden 截断
+    var fwidth = parseInt($tempP1.css('font-size'));
+    $tempWrapper.remove();
+
     $('#gnContent').hide();
     var linerized = Convert(curContent);
     $('#gnContent').html(linerized.join(''));
 
-
-    var lheight = parseInt($('p').outerHeight(true)) + 1;
-    var fwidth = parseInt($('p').css('font-size'));
-    //console.info("Line Height:" + $('p').outerHeight(true));
+    // 精确计算可用高度：使用 hide() 前保存的 gnContentHeight (CSS: calc(100% - 60px) box-sizing:border-box)
+    // 减去 4px 余量防止最后一行被 overflow:hidden 截断
+    var availHeight = gnContentHeight - 4;
 
     //容纳行数
     //每行字数
@@ -329,13 +382,7 @@ function rewritePage(url, startp) {
     // 需要预先算出究竟要分几页，每页分到几个<p>!
 
     // 要用字数优先！
-    var linecnt;
-    if (rtwocolumn) {
-        linecnt = parseInt((wheight - 80) / lheight);
-        linecnt = linecnt * 2;
-    } else {
-        linecnt = parseInt((wheight - 80) / lheight);
-    }
+    var linecnt = Math.floor(availHeight / lheight);
 
     //应当以字数来精确计算
     var pagedinfo = $("<div></div>");
@@ -370,32 +417,56 @@ function rewritePage(url, startp) {
     var inPaging = true;
     var lineptr = 0;
     var pages = 0;
-    for (var i = 0; inPaging; i++) {
-        pages++;
-        pagedinfo.append($("<div class='bb-item' index=" + i + "></div>"));
-        // Set padding
-        if (i % 2 == 0) pagedinfo.find('.bb-item').last().addClass('odd-page');
-        /* Define the direction */
-        /* Claud */
-        if (rdir) {
-            directionarray.push([0, i]);
-        } else {
-            directionarray.push([i, 0]);
+    if (rtwocolumn) {
+        // 双栏模式：每屏（bb-item）显示两页（左栏=第N页，右栏=第N+1页）
+        // 先将 sortedlines 按 linecnt 行一组切分成单页
+        var pageBlocks = [];
+        var pagePtr = 0;
+        while (pagePtr < sortedlines.length) {
+            pageBlocks.push(sortedlines.slice(pagePtr, pagePtr + linecnt));
+            pagePtr += linecnt;
         }
-        // for 2 column, always sent them into 2 block, but control the css style .
-        pagedinfo.find('.bb-item').last().append("<div class='left-page column'></div>");
-        pagedinfo.find('.bb-item').last().append("<div class='right-page column'></div>");
-        for (var j = 0; j < linecnt; j++) {
-            if (rtwocolumn) {
-                pagedinfo.find('.bb-item').last().addClass('two-column-item');
+        var totalPages = pageBlocks.length;
+        // 每两页一组放入一个 bb-item
+        for (var i = 0; i < totalPages; i += 2) {
+            pages++;
+            pagedinfo.append($("<div class='bb-item two-column-item' index=" + i + "></div>"));
+            if (pages % 2 == 1) pagedinfo.find('.bb-item').last().addClass('odd-page');
+            if (rdir) {
+                directionarray.push([0, i]);
+            } else {
+                directionarray.push([i, 0]);
             }
-            if (j < linecnt / 2)
-                pagedinfo.find('.bb-item .left-page').last().append(sortedlines[lineptr]);
-            else
-                pagedinfo.find('.bb-item .right-page').last().append(sortedlines[lineptr]);
-            if (lineptr++ == sortedlines.length) {
-                inPaging = false;
-                break;
+            pagedinfo.find('.bb-item').last().append("<div class='left-page column'></div>");
+            pagedinfo.find('.bb-item').last().append("<div class='right-page column'></div>");
+            // 左栏 = 第i页
+            pagedinfo.find('.bb-item .left-page').last().append(pageBlocks[i]);
+            // 右栏 = 第i+1页（如果存在）
+            if (i + 1 < totalPages) {
+                pagedinfo.find('.bb-item .right-page').last().append(pageBlocks[i + 1]);
+            }
+        }
+    } else {
+        for (var i = 0; inPaging; i++) {
+            pages++;
+            pagedinfo.append($("<div class='bb-item' index=" + i + "></div>"));
+            if (i % 2 == 0) pagedinfo.find('.bb-item').last().addClass('odd-page');
+            if (rdir) {
+                directionarray.push([0, i]);
+            } else {
+                directionarray.push([i, 0]);
+            }
+            pagedinfo.find('.bb-item').last().append("<div class='left-page column'></div>");
+            pagedinfo.find('.bb-item').last().append("<div class='right-page column'></div>");
+            for (var j = 0; j < linecnt; j++) {
+                if (j < linecnt / 2)
+                    pagedinfo.find('.bb-item .left-page').last().append(sortedlines[lineptr]);
+                else
+                    pagedinfo.find('.bb-item .right-page').last().append(sortedlines[lineptr]);
+                if (lineptr++ == sortedlines.length) {
+                    inPaging = false;
+                    break;
+                }
             }
         }
     }
@@ -457,4 +528,3 @@ function detectBottom(e) {
     }
 
 }
-
