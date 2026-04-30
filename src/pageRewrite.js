@@ -27,6 +27,22 @@ function rewritePage(url, startp) {
         eval(rjs);
     }
     $('body').empty();
+    // 在追加任何内容前，彻底清理原始页面 head/body 中的脚本
+    // 阻止任何原始页面的脚本被保留或执行
+    try {
+        document.head.innerHTML = document.head.innerHTML.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '');
+        document.head.innerHTML = document.head.innerHTML.replace(/<script\b[^>]*\/?>/gi, '');
+    } catch (e) {}
+    // 清理 loadedContent[4] 中可能残留的 script/style 标签（字符串级别安全网）
+    if (loadedContent[4] && typeof loadedContent[4] === 'string') {
+        var scriptRe = /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi;
+        while (scriptRe.test(loadedContent[4])) {
+            loadedContent[4] = loadedContent[4].replace(scriptRe, '');
+        }
+        loadedContent[4] = loadedContent[4].replace(/<script\b[^>]*\/?>/gi, '');
+        loadedContent[4] = loadedContent[4].replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript\s*>/gi, '');
+        loadedContent[4] = loadedContent[4].replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    }
     //    $('body').attr('style','');
     $('body').attr('style', '');
     var fontpath = chrome.runtime.getURL('src/font');
@@ -340,7 +356,7 @@ function rewritePage(url, startp) {
     // Refine the text
     var wwidth = $(window).width();
 
-    var expectwidth = rtwocolumn ? 1280 : 960; // Default central colume = 960px;
+    var expectwidth = rtwocolumn ? (rcontentwidth * 2) : rcontentwidth; // Use configured content width
     // Calculate the padding ;
     if (wwidth <= expectwidth) expectwidth = wwidth;
     var sidepadding = (wwidth - expectwidth) / 2;
@@ -374,7 +390,7 @@ function rewritePage(url, startp) {
         chcnt = parseInt((expectwidth - 400) / fwidth);
         chcnt = parseInt(chcnt / 2);
     } else {
-        chcnt = parseInt((expectwidth - 20) / fwidth);
+        chcnt = parseInt((rcontentwidth - 20) / fwidth);
     }
 
     // 输入行数

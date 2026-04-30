@@ -22,12 +22,12 @@ body {
 #gnContent {
   width: 100%;
   font-family: var(--font-serif) !important;
-  font-size: 1rem;
+  font-size: var(--reader-font-size, 1rem);
   color: var(--color-text);
   margin-left: auto;
   margin-right: auto;
   margin-top: 60px;
-  line-height: 1.8;
+  line-height: var(--reader-line-height, 1.8);
   background: var(--color-bg) !important;
   height: calc(100% - 60px) !important;
   box-sizing: border-box;
@@ -180,8 +180,8 @@ body {
   overflow: hidden !important;
   white-space: normal !important;
   color: var(--color-text) !important;
-  font-size: 1em !important;
-  line-height: 1.8 !important;
+  font-size: var(--reader-font-size, 1em) !important;
+  line-height: var(--reader-line-height, 1.8) !important;
 }
 .bb-item.two-column-item {
   display: flex;

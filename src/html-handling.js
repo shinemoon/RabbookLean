@@ -79,8 +79,18 @@ function htmlToPlainText(htmlText, styleConfig) {
     tmp = tmp.replace(/.*<body[^>]*>/i, "");
 
     // remove inbody scripts and styles
-    tmp = tmp.replace(/<(script|style)( [^>]*)*>((?!<\/\1( [^>]*)*>).)*<\/\1>/gi, "");
-
+    // 先反复移除 <script>...</script> 和 <style>...</style> 及其内容（包括嵌套情况）
+    var scriptStyleTagRe = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+    while (scriptStyleTagRe.test(tmp)) {
+        tmp = tmp.replace(scriptStyleTagRe, "");
+    }
+    // 额外移除无内容/自闭合的 <script ... /> 和 <style ... />
+    tmp = tmp.replace(/<(script|style)\b[^>]*\/?>/gi, "");
+    // 移除 on* 行内事件处理属性（如 onclick, onerror, onload, onmouseover 等）
+    tmp = tmp.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    // 移除 javascript: 伪协议链接
+    tmp = tmp.replace(/\bhref\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, 'href="#"');
+    tmp = tmp.replace(/\bsrc\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*'|javascript:[^\s>]+)/gi, 'src=""');
     // remove all tags except that are being handled separately
     tmp = tmp.replace(/<(\/)?((?!h[1-6]( [^>]*)*>)(?!img( [^>]*)*>)(?!a( [^>]*)*>)(?!ul( [^>]*)*>)(?!ol( [^>]*)*>)(?!li( [^>]*)*>)(?!p( [^>]*)*>)(?!div( [^>]*)*>)(?!td( [^>]*)*>)(?!br( [^>]*)*>)[^>\/])[^>]*>/gi, "");
 

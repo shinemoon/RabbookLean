@@ -56,6 +56,15 @@ function isValidPageForInjection() {
     return true;
 }
 
+// 将排版配置作为 CSS 自定义属性应用到根元素
+// 这样 main.css 中的 var(--reader-font-size) 等变量就能生效
+function applyReaderConfig(fontsize, linespacing, contentwidth) {
+    var root = document.documentElement;
+    root.style.setProperty('--reader-font-size', (fontsize || 16) + 'px');
+    root.style.setProperty('--reader-line-height', linespacing || 1.6);
+    root.style.setProperty('--reader-content-width', (contentwidth || 960) + 'px');
+}
+
 // 建立与 Service Worker 的连接
 function connectToBackground() {
     // 页面 URL 无效时跳过连接，避免无效连接导致的 runtime.lastError
@@ -103,6 +112,8 @@ function connectToBackground() {
             rfontsize = msg.fontsize || 16;
             rlinespacing = msg.linespacing || 1.6;
             rcontentwidth = msg.contentwidth || 960;
+            // 将配置值应用到 CSS 自定义属性，使 main.css 中的 var() 引用生效
+            applyReaderConfig(rfontsize, rlinespacing, rcontentwidth);
         };
         if (msg.type == "go") {
             if (msg.progress != null) {
@@ -205,18 +216,38 @@ function handleContent(bodytxt, url = null) {
     dummy = $("<div id='dummy'></div>");
     dummy.append(bodytxt);
 
-    //Remove script
+    //Remove all script elements and inline event handlers
     dummy.find('script').remove();
+    dummy.find('[onload]').removeAttr('onload');
+    dummy.find('[onerror]').removeAttr('onerror');
+    dummy.find('[onclick]').removeAttr('onclick');
+    dummy.find('[onmouseover]').removeAttr('onmouseover');
+    dummy.find('[onmouseout]').removeAttr('onmouseout');
+    dummy.find('[onkeydown]').removeAttr('onkeydown');
+    dummy.find('[onkeyup]').removeAttr('onkeyup');
+    dummy.find('[onsubmit]').removeAttr('onsubmit');
+    dummy.find('[onchange]').removeAttr('onchange');
+    dummy.find('[onfocus]').removeAttr('onfocus');
+    dummy.find('[onblur]').removeAttr('onblur');
+    dummy.find('[onmousedown]').removeAttr('onmousedown');
+    dummy.find('[onmouseup]').removeAttr('onmouseup');
+    dummy.find('[ondblclick]').removeAttr('ondblclick');
+    dummy.find('[oncontextmenu]').removeAttr('oncontextmenu');
+    dummy.find('[onwheel]').removeAttr('onwheel');
     //Remove redundancy
     dummy.find('link').remove();
     dummy.find('ins').remove();
-    $('table, tr, td').filter(function (index) {
+    // 清除导航相关表格时限定在 dummy 范围内，不污染全局 DOM
+    dummy.find('table, tr, td').filter(function (index) {
         if ($(this).text().match('.*[下|后]\s*一*\s*[章|回|页|节].*')) {
             return false;
         } else {
             return true;
         }
     }).remove();
+    // 移除所有带 javascript: 伪协议的 href/src
+    dummy.find('[href*="javascript:"]').attr('href', '#');
+    dummy.find('[src*="javascript:"]').attr('src', '');
 
     var cbody = dummy;
     var jres = judgePage(cbody);
@@ -366,10 +397,29 @@ function parseContent(ctn) {
 
 
 
-    //Clean further
-    $('link').remove();
-    $('script').remove();
-    $('table').filter(function (index) {
+    //Clean further — 限定在 ctn 上下文，不污染全局 DOM
+    ctn.find('link').remove();
+    ctn.find('script').remove();
+    ctn.find('noscript').remove();
+    ctn.find('[onload]').removeAttr('onload');
+    ctn.find('[onerror]').removeAttr('onerror');
+    ctn.find('[onclick]').removeAttr('onclick');
+    ctn.find('[onmouseover]').removeAttr('onmouseover');
+    ctn.find('[onmouseout]').removeAttr('onmouseout');
+    ctn.find('[onkeydown]').removeAttr('onkeydown');
+    ctn.find('[onkeyup]').removeAttr('onkeyup');
+    ctn.find('[onsubmit]').removeAttr('onsubmit');
+    ctn.find('[onchange]').removeAttr('onchange');
+    ctn.find('[onfocus]').removeAttr('onfocus');
+    ctn.find('[onblur]').removeAttr('onblur');
+    ctn.find('[onmousedown]').removeAttr('onmousedown');
+    ctn.find('[onmouseup]').removeAttr('onmouseup');
+    ctn.find('[ondblclick]').removeAttr('ondblclick');
+    ctn.find('[oncontextmenu]').removeAttr('oncontextmenu');
+    ctn.find('[onwheel]').removeAttr('onwheel');
+    ctn.find('[href*="javascript:"]').attr('href', '#');
+    ctn.find('[src*="javascript:"]').attr('src', '');
+    ctn.find('table').filter(function (index) {
         if ($(this).text().match('.*[下|后]\s*一*\s*[章|回|页].*')) {
             return false;
         } else {

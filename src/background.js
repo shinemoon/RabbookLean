@@ -19,7 +19,7 @@ var configReady = false;
 
 // 读取配置，一旦就绪开始处理连接
 function initConfigAndListener() {
-    chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null }, function (r) {
+    chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 }, function (r) {
         /* 配置说明 */
         /*
         "clist": [], 自定义内容选择符列表
@@ -119,7 +119,7 @@ function handlePort(port) {
     // Mul-port supported
     if (port.name == 'detailspage') {
         // 每次连接配置页面，重新load一次配置
-        chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null }, function (r) {
+        chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 }, function (r) {
             config = r;
             // 可选：处理断开连接
             port.onDisconnect.addListener(function () {
