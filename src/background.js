@@ -189,7 +189,7 @@ function readPage(conf = null, targetTab = null) {
             // 插入 CSS 文件
             chrome.scripting.insertCSS({
                 target: { tabId: tabIn.id },
-                files: ["main.css", "font/style.css"]
+                files: ["src/main.css", "src/font/style.css"]
             });
 
             // 如果 css 变量有值，插入 CSS 代码
@@ -204,7 +204,7 @@ function readPage(conf = null, targetTab = null) {
             // 执行 JavaScript 文件
             chrome.scripting.executeScript({
                 target: { tabId: tabIn.id },
-                files: ["pre-main.js", "html-handling.js", "pageRewrite.js", "main.js"]
+                files: ["src/pre-main.js", "src/html-handling.js", "src/pageRewrite.js", "src/main.js"]
             });
         });
     }

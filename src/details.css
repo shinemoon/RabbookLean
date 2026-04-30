@@ -1,0 +1,238 @@
+.popButton{
+  line-height:24px;
+  height:30px;
+  width:120px;
+  color:#ffffff;
+  background-color:#555555;
+  font-size:14px;
+  font-weight:normal;
+  font-family:Arial;
+  text-align:center;
+  text-decoration:none;
+  margin-top:50px;
+  margin-bottom:6px;
+  margin-left:20px;
+  cursor:pointer;
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  border:1px solid #eee;
+}
+
+.popButton:hover{
+  opacity:0.8;
+  color:black;
+}
+
+.popButton.save {
+  background-color:#55ee55;
+}
+.popButton.reset{
+  background-color:#ee5555;
+}
+
+input[type="checkbox"] {
+  display: none!important;
+}
+input[type="checkbox"]+label::after {
+  content: "";
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  background: #EEE;
+  vertical-align: middle;
+  -webkit-border-radius: 50%;
+  margin-right: 5px;
+  margin-left: 45px;
+  -webkit-box-sizing:border-box;
+  -webkit-transition:background ease-in .5s;
+  cursor:pointer;
+}
+input[type="checkbox"]:checked+label::after {
+  background-color: #f00;
+}
+
+input[type="checkbox"]:checked+label::after {
+  content: "";
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  background: #EEE;
+  vertical-align: middle;
+  -webkit-border-radius: 50%;
+  margin-right: 5px;
+  margin-left: 45px;
+  -webkit-box-sizing:border-box;
+  -webkit-transition:background ease-in .5s
+}
+
+input[type="checkbox"]:checked+label::after{
+  background-color: rgb(53, 183, 111);
+  border: 5px #EEEEEE solid;
+}
+
+body {
+  text-align:center;
+}
+
+#header {
+  position:fixed;
+  left:10px;
+  top:10px;
+  font-size:32px;
+  font-weight:bolder;
+  color: grey;
+  opacity:0.2;
+}
+
+#header .alt{
+  font-style: italic;
+  font-size: 20px;
+  position:relative;
+  left:10px;
+  color:#dfdfdf;
+}
+
+#mainframe {
+  width:960px;
+  margin-left:auto;
+  margin-right:auto;
+  margin-top:50px;
+}
+
+.topline {
+  width:100%;
+  margin-top:40px;
+  text-align:right;
+  font-size:20px;
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  border-bottom:1px solid lightgrey;
+  padding-top:10px;
+  padding-right:10px;
+  cursor:pointer;
+  background: rgba(200,200,200,0.1);
+}
+
+.topline.hide {
+  background:#ffffff;
+  width:50%;
+  border-radius-left-top:10px;
+}
+
+.bookmarks ul{
+  list-style-type:none;
+}
+
+.bookmarks ul li{
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  max-width:900px;
+  word-break:keep-all;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:18px;
+  padding-top:10px;
+  padding-bottom:10px;
+  padding-left:30px;
+}
+.bookmarks ul li:nth-child(even){
+  background:rgba(200,200,200,0.2);
+}
+.bookmarks ul li:hover{
+  background:rgba(200,200,200,0.1);
+}
+.spanbut {
+  float:left;
+  border:0px solid grey;
+  font-size:14px;
+  margin-right:5px;
+  padding:3px;
+  width:14px;
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  background:rgba(200,000,000,0.2);
+  cursor:pointer;
+  border-radius:10px;
+  color:white;
+}
+
+.bookmarks ul li:nth-child(even) .spanbut{
+  color:black;
+}
+
+.bookmarks ul li:nth-child(even) .spanbut.del:hover, .spanbut.del:hover {
+  background:rgba(200,100,100,0.5);
+}
+.bookmarks ul li:nth-child(even) .spanbut.pin:hover, .spanbut.pin:hover {
+  background:rgba(100,200,100,0.5);
+}
+
+.bookmarks ul li a {
+  font-family: Georgia, "Nimbus Roman No9 L", "AR PL UMing CN", "AR PL UMing HK", "AR PL UMing TW", "AR PL UMing TW MBE", PMingLiU, MingLiU, serif;
+  text-decoration: none; 
+  font-size: 18px;
+  color:black;
+}
+
+.linka {
+  cursor:pointer;
+}
+
+.input-block {
+  margin-top:20px;
+  margin-bottom:20px;
+}
+
+#configs {
+  text-align:left;
+}
+
+.input-block{
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  font-size:16px;
+  padding-left:20px;
+}
+
+.input-block input[type='text']{
+  width:800px;
+  border:1px solid #eee;
+  height:30px;
+  margin-left:30px;
+  padding-left:20px;
+}
+.shortnote {
+  font-size:10px;
+  margin-left:30px;
+  color:#996666;
+  margin-top:10px;
+  opacity:0.8;
+}
+
+.aboutdetails {
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  font-size:20px;
+  margin-top:20px;
+  float:right;
+  color:#999999;
+}
+
+textarea.css {  
+  margin-top:10px;
+  width:930px;
+  height:270px;
+  resize: none; 
+  border:1px solid #eeeeee;
+  background:url('images/bk.png') no-repeat 95% 90%; 
+  padding:20px;
+  font-family: Baskerville, Georgia, "Liberation Serif", "Kaiti SC", STKaiti, "AR PL UKai CN", "AR PL UKai HK", "AR PL UKai TW", "AR PL UKai TW MBE", "AR PL KaitiM GB", KaiTi, KaiTi_GB2312, "TW\-Kai", serif;
+  font-size:16px;
+}
+textarea.css:focus {
+  border:1px solid #eeeeee;
+  outline: none !important;
+}
+.popButton.csssave {
+  margin-top:20px;
+  background-color:#55ee55;
+}
+.popButton.cssclean{
+  margin-top:20px;
+  background-color:#ee5555;
+}
