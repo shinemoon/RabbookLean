@@ -544,6 +544,102 @@ textarea.form-input {
 }
 
 /* ============================================
+   Modern Feedback UI
+   ============================================ */
+.ui-toast-host {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.ui-toast {
+  min-width: 220px;
+  max-width: 360px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+  transform: translateY(-6px) scale(0.98);
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.ui-toast.show {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.ui-toast.ui-toast-success {
+  border-left: 4px solid var(--color-success);
+}
+
+.ui-toast.ui-toast-danger {
+  border-left: 4px solid var(--color-danger);
+}
+
+.ui-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.ui-dialog-backdrop.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ui-dialog {
+  width: min(460px, 100%);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 18px;
+  transform: translateY(10px) scale(0.98);
+  transition: transform 0.18s ease;
+}
+
+.ui-dialog-backdrop.show .ui-dialog {
+  transform: translateY(0) scale(1);
+}
+
+.ui-dialog-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.ui-dialog-message {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.ui-dialog-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ============================================
    Responsive
    ============================================ */
 @media (max-width: 640px) {
@@ -565,6 +661,16 @@ textarea.form-input {
 
   .btn {
     justify-content: center;
+  }
+
+  .ui-toast-host {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+  }
+
+  .ui-toast {
+    max-width: 100%;
   }
 }
 

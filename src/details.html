@@ -13,6 +13,29 @@
   <div class="brand"><span class="alt">Lean</span>Rabbook</div>
 </div>
 
+  <!-- ===== 阅读堆栈 ===== -->
+  <div class="section-card topline" toggle_target="bookmarks">
+    <div class="section-header is-open">
+      <div class="section-title">
+        <span class="icon bookmark">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <span>阅读堆栈</span>
+      </div>
+      <span class="section-arrow is-open">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </span>
+    </div>
+    <div class="section-body bookmarks is-open" style="display:block;">
+      <ul class="bookmarks-list">
+      </ul>
+    </div>
+  </div>
+
   <!-- ===== 高级配置 ===== -->
   <div class="section-card topline hide" toggle_target="configs">
     <div class="section-header">
@@ -164,7 +187,7 @@
     <div class="section-body hidetgt cssdetails">
       <div class="form-group">
         <label class="form-label" for="cssinput">自定义 CSS</label>
-        <textarea class="form-input css" id="cssinput" placeholder="留空使用系统内置主题，当有内容时，将会用此内容覆盖。涉及关键字：#gnContent（正文）， #lrbk_title（标题），#nav （翻页按钮）"></textarea>
+        <textarea class="form-input css" id="cssinput" style="height:800px;" placeholder="留空使用系统内置主题，当有内容时，将会用此内容覆盖。涉及关键字：#gnContent（正文）， #lrbk_title（标题），#nav （翻页按钮）"></textarea>
       </div>
       <div class="btn-row">
         <button class="btn btn-success csssave">保存主题</button>
@@ -201,29 +224,6 @@
         <button class="btn btn-success jssave">保存脚本</button>
         <button class="btn btn-danger jsclean">清空脚本</button>
       </div>
-    </div>
-  </div>
-
-  <!-- ===== 阅读堆栈 ===== -->
-  <div class="section-card topline" toggle_target="bookmarks">
-    <div class="section-header">
-      <div class="section-title">
-        <span class="icon bookmark">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-          </svg>
-        </span>
-        <span>阅读堆栈</span>
-      </div>
-      <span class="section-arrow">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </span>
-    </div>
-    <div class="section-body hidetgt bookmarks">
-      <ul class="bookmarks-list">
-      </ul>
     </div>
   </div>
 

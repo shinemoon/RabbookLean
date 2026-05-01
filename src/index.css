@@ -110,7 +110,7 @@ body {
 }
 
 .popup-footer {
-  text-align: center;
+  text-align: right;
   padding-top: var(--space-1);
   border-top: 1px solid var(--color-border-light);
   margin-top: var(--space-1);

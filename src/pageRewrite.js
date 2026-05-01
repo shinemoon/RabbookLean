@@ -513,12 +513,6 @@ function rewritePage(url, startp) {
     $('#gnContent').show();
 
 
-    $('body').append("<div id='hint'> 'q':跳转页面 </div>");
-    setTimeout(function () {
-        $('#hint').hide();
-    }, 2000);
-
-
 }; //Rewrite Page Done
 
 function urlProceed(u) {

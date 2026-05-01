@@ -21,6 +21,88 @@ var scrollCnt = 0;
 
 var bklist = [];
 var css = null;
+var confirmResolver = null;
+
+function ensureFeedbackUi() {
+    if ($('#ui-toast-host').length === 0) {
+        $('body').append('<div id="ui-toast-host" class="ui-toast-host" aria-live="polite" aria-atomic="true"></div>');
+    }
+
+    if ($('#ui-dialog-backdrop').length === 0) {
+        var dialogHtml = '' +
+            '<div id="ui-dialog-backdrop" class="ui-dialog-backdrop" aria-hidden="true">' +
+            '  <div class="ui-dialog" role="dialog" aria-modal="true" aria-labelledby="ui-dialog-title">' +
+            '    <div class="ui-dialog-title" id="ui-dialog-title">请确认</div>' +
+            '    <div class="ui-dialog-message" id="ui-dialog-message"></div>' +
+            '    <div class="ui-dialog-actions">' +
+            '      <button type="button" id="ui-dialog-cancel" class="btn btn-ghost">取消</button>' +
+            '      <button type="button" id="ui-dialog-ok" class="btn btn-primary">确认</button>' +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+        $('body').append(dialogHtml);
+    }
+
+    $('#ui-dialog-cancel').off('click.ui').on('click.ui', function () {
+        closeConfirmDialog(false);
+    });
+    $('#ui-dialog-ok').off('click.ui').on('click.ui', function () {
+        closeConfirmDialog(true);
+    });
+    $('#ui-dialog-backdrop').off('click.ui').on('click.ui', function (e) {
+        if (e.target.id === 'ui-dialog-backdrop') {
+            closeConfirmDialog(false);
+        }
+    });
+}
+
+function showToast(message, type = 'success', duration = 3000) {
+    ensureFeedbackUi();
+    var $host = $('#ui-toast-host');
+    var $toast = $('<div class="ui-toast"></div>');
+    $toast.addClass('ui-toast-' + type).text(message);
+    $host.append($toast);
+
+    requestAnimationFrame(function () {
+        $toast.addClass('show');
+    });
+
+    setTimeout(function () {
+        $toast.removeClass('show');
+        setTimeout(function () {
+            $toast.remove();
+        }, 200);
+    }, duration);
+}
+
+function closeConfirmDialog(result) {
+    var $backdrop = $('#ui-dialog-backdrop');
+    $backdrop.removeClass('show').attr('aria-hidden', 'true');
+    if (confirmResolver) {
+        var resolver = confirmResolver;
+        confirmResolver = null;
+        resolver(result);
+    }
+}
+
+function showConfirmDialog(message, title = '请确认') {
+    ensureFeedbackUi();
+
+    if (confirmResolver) {
+        closeConfirmDialog(false);
+    }
+
+    $('#ui-dialog-title').text(title);
+    $('#ui-dialog-message').text(message);
+    $('#ui-dialog-backdrop').addClass('show').attr('aria-hidden', 'false');
+
+    return new Promise(function (resolve) {
+        confirmResolver = resolve;
+        setTimeout(function () {
+            $('#ui-dialog-ok').trigger('focus');
+        }, 0);
+    });
+}
 
 function connectToBackground() {
     try {
@@ -148,14 +230,21 @@ function displayPage() {
         $('.bookmarks-list').append(cstr);
     }
 
-    $('.del.spanbut').click(function () {
+    $('.del.spanbut').off('click').on('click', async function () {
+        var ok = await showConfirmDialog('确定要删除这条阅读记录吗？', '删除确认');
+        if (!ok) {
+            return;
+        }
         var ind = $(this).parent().find('.linka').eq(0).attr('ind');
         var tmplist = bklist.slice(0, Number(ind));
         tmplist = tmplist.concat(bklist.slice(Number(ind) + 1, bklist.length));
         bklist = tmplist;
         chrome.storage.local.set({ 'bookmarks': bklist }, function () {
             console.info("Bookmarks Updated Done");
-            window.location.reload();
+            showToast('已删除阅读记录');
+            setTimeout(function () {
+                window.location.reload();
+            }, 280);
         });
     });
 
@@ -225,7 +314,7 @@ function displayPage() {
         }
     });
 
-    $('.save').click(function () {
+    $('.save').off('click').on('click', function () {
         var sok = true;
         var ttxt = $("#title-selector").val();
         if (ttxt != "") {
@@ -306,38 +395,48 @@ function displayPage() {
 
         if (sok) {
             chrome.storage.local.set({ "clist": clist, "flist": flist, "plist": plist, "nlist": nlist, "tlist": tlist, "dir": dir, "twocolumn": twocolumn }, function () {
-                alert("设置完成");
-                window.location.reload();
+                showToast("设置完成");
             });
         } else {
-            alert("配置无效，请检查格式。");
+            showToast("配置无效，请检查格式。", 'danger', 2400);
         }
     });
 
-    $('.reset').click(function () {
+    $('.reset').off('click').on('click', async function () {
+        var ok = await showConfirmDialog('将恢复高级配置到默认值，是否继续？', '重置确认');
+        if (!ok) {
+            return;
+        }
         clist = [];
         flist = [];
         dir = false;
         twocolumn = false;
         chrome.storage.local.set({ "clist": clist, "flist": flist, "plist": plist, "nlist": nlist, "tlist": tlist, "dir": dir, "twocolumn": twocolumn }, function () { });
-        alert("重置完成");
-        window.location.reload();
+        showToast("重置完成");
+        setTimeout(function () {
+            window.location.reload();
+        }, 280);
     });
 
     // Layout save/reset
-    $('.layoutsave').click(function () {
+    $('.layoutsave').off('click').on('click', function () {
         var fontsize = parseInt($('#fontsize').val());
         var linespacing = parseFloat($('#linespacing').val());
         var contentwidth = parseInt($('#contentwidth').val());
         chrome.storage.local.set({ "fontsize": fontsize, "linespacing": linespacing, "contentwidth": contentwidth }, function () {
-            alert("排版设置保存完毕");
-            window.location.reload();
+            showToast("排版设置保存完毕");
         });
     });
-    $('.layoutreset').click(function () {
+    $('.layoutreset').off('click').on('click', async function () {
+        var ok = await showConfirmDialog('将恢复排版参数到默认值，是否继续？', '重置确认');
+        if (!ok) {
+            return;
+        }
         chrome.storage.local.set({ "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 }, function () {
-            alert("排版已重置为默认值");
-            window.location.reload();
+            showToast("排版已重置为默认值");
+            setTimeout(function () {
+                window.location.reload();
+            }, 280);
         });
     });
 
@@ -352,28 +451,40 @@ function displayPage() {
         $('#contentwidth-val').text($(this).val() + 'px');
     });
 
-    $('.csssave').click(function () {
+    $('.csssave').off('click').on('click', function () {
         css = $('#cssinput').val();
         chrome.storage.local.set({ "css": css }, function () {
-            alert("样式保存完毕");
-            window.location.reload();
+            showToast("样式保存完毕");
         });
     });
-    $('.cssclean').click(function () {
+    $('.cssclean').off('click').on('click', async function () {
+        var ok = await showConfirmDialog('将清空当前自定义主题，是否继续？', '清空确认');
+        if (!ok) {
+            return;
+        }
         $('#cssinput').val("");
-        $('.csssave').click();
+        css = '';
+        chrome.storage.local.set({ "css": css }, function () {
+            showToast("主题已清空");
+        });
     });
 
-    $('.jssave').click(function () {
+    $('.jssave').off('click').on('click', function () {
         rjs = $('#jsinput').val();
         chrome.storage.local.set({ "js": rjs }, function () {
-            alert("脚本保存完毕");
-            window.location.reload();
+            showToast("脚本保存完毕");
         });
     });
-    $('.jsclean').click(function () {
+    $('.jsclean').off('click').on('click', async function () {
+        var ok = await showConfirmDialog('将清空当前附加脚本，是否继续？', '清空确认');
+        if (!ok) {
+            return;
+        }
         $('#jsinput').val("");
-        $('.jssave').click();
+        rjs = '';
+        chrome.storage.local.set({ "js": rjs }, function () {
+            showToast("脚本已清空");
+        });
     });
 
 

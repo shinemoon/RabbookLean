@@ -40,6 +40,11 @@ connectToBackground();
 
 
 $(document).ready(function () {
+    // Display version
+    const manifest = chrome.runtime.getManifest();
+    const manifestVersion = manifest.version;
+    $('#version-label').text('v' + manifestVersion);
+
     $('#readpage').click(function () {
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
             curtab = tabs[0];
