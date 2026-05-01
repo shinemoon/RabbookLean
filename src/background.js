@@ -5,6 +5,8 @@ var cntport = null;
 var detport = null;
 var config = null;
 
+var DEFAULT_CONFIG = { 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight": false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 };
+
 // Allowd url , only from bookmark page!
 var allowedurl = null;
 
@@ -17,9 +19,16 @@ var bklist = [];
 // 标志：配置是否已就绪
 var configReady = false;
 
+function getLatestConfig(callback) {
+    chrome.storage.local.get(DEFAULT_CONFIG, function (r) {
+        config = r;
+        callback(r);
+    });
+}
+
 // 读取配置，一旦就绪开始处理连接
 function initConfigAndListener() {
-    chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 }, function (r) {
+    getLatestConfig(function (r) {
         /* 配置说明 */
         /*
         "clist": [], 自定义内容选择符列表
@@ -32,7 +41,6 @@ function initConfigAndListener() {
          "css": null, 自定义css样式
          "js": null , 自定义脚本
         */
-        config = r;
         configReady = true;
         // 处理队列中等待的连接
         flushPendingConnections();
@@ -119,8 +127,7 @@ function handlePort(port) {
     // Mul-port supported
     if (port.name == 'detailspage') {
         // 每次连接配置页面，重新load一次配置
-        chrome.storage.local.get({ 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight":false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 }, function (r) {
-            config = r;
+        getLatestConfig(function (r) {
             // 可选：处理断开连接
             port.onDisconnect.addListener(function () {
                 //detport = detport.filter(p => p.sender.id !== port.sender.id);
@@ -134,7 +141,7 @@ function handlePort(port) {
                 if (msg.type == "register") {
                     fromDetails = true;
                     allowedurl = msg.url; //注册网址，等待注入
-                    tryInjectScript(config, allowedurl);
+                    tryInjectScript(r, allowedurl);
                 }
             });
         });
@@ -257,25 +264,28 @@ function readPage(conf = null, targetTab = null) {
             curtab = tb;
             const rTitle = curtab.title;
             delayStop(function () {
-                // 插入 CSS 文件
-                chrome.scripting.insertCSS({
-                    target: { tabId: tabIn.id },
-                    files: ["src/main.css", "src/font/style.css"]
-                });
-
-                // 如果 css 变量有值，插入 CSS 代码
-                if (conf.css == null || conf.css == "") {
-                    console.log('no css');
-                } else {
+                getLatestConfig(function (latestConf) {
+                    var injectedConf = latestConf || conf || DEFAULT_CONFIG;
+                    // 插入 CSS 文件
                     chrome.scripting.insertCSS({
                         target: { tabId: tabIn.id },
-                        css: conf.css
+                        files: ["src/design-tokens.css", "src/main.css", "src/font/style.css"]
                     });
-                }
-                // 执行 JavaScript 文件
-                chrome.scripting.executeScript({
-                    target: { tabId: tabIn.id },
-                    files: ["src/pre-main.js", "src/html-handling.js", "src/pageRewrite.js", "src/main.js"]
+
+                    // 如果 css 变量有值，插入 CSS 代码
+                    if (injectedConf.css == null || injectedConf.css == "") {
+                        console.log('no css');
+                    } else {
+                        chrome.scripting.insertCSS({
+                            target: { tabId: tabIn.id },
+                            css: injectedConf.css
+                        });
+                    }
+                    // 执行 JavaScript 文件
+                    chrome.scripting.executeScript({
+                        target: { tabId: tabIn.id },
+                        files: ["src/pre-main.js", "src/html-handling.js", "src/pageRewrite.js", "src/main.js"]
+                    });
                 });
             });
         });

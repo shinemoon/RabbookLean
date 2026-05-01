@@ -365,21 +365,6 @@ function displayPage() {
             };
         }
 
-        var sdir = $("#reader-dir").prop("checked");
-        try {
-            dir = sdir;
-        } catch (err) {
-            sok = false;
-        };
-
-        var stwocolumn = $("#two-column").prop("checked");
-        try {
-            twocolumn = stwocolumn;
-        } catch (err) {
-            sok = false;
-        };
-
-
         var ctxt = $("#text-selector").val();
         if (ctxt != "") {
             try {
@@ -394,7 +379,7 @@ function displayPage() {
         }
 
         if (sok) {
-            chrome.storage.local.set({ "clist": clist, "flist": flist, "plist": plist, "nlist": nlist, "tlist": tlist, "dir": dir, "twocolumn": twocolumn }, function () {
+            chrome.storage.local.set({ "clist": clist, "flist": flist, "plist": plist, "nlist": nlist, "tlist": tlist }, function () {
                 showToast("设置完成");
             });
         } else {
@@ -423,7 +408,23 @@ function displayPage() {
         var fontsize = parseInt($('#fontsize').val());
         var linespacing = parseFloat($('#linespacing').val());
         var contentwidth = parseInt($('#contentwidth').val());
-        chrome.storage.local.set({ "fontsize": fontsize, "linespacing": linespacing, "contentwidth": contentwidth }, function () {
+        var sdir = !!$('#reader-dir').prop('checked');
+        var stwocolumn = !!$('#two-column').prop('checked');
+
+        if (!Number.isFinite(fontsize) || !Number.isFinite(linespacing) || !Number.isFinite(contentwidth)) {
+            showToast("排版参数无效，请检查后重试。", 'danger', 2400);
+            return;
+        }
+
+        dir = sdir;
+        twocolumn = stwocolumn;
+        chrome.storage.local.set({
+            "fontsize": fontsize,
+            "linespacing": linespacing,
+            "contentwidth": contentwidth,
+            "dir": dir,
+            "twocolumn": twocolumn
+        }, function () {
             showToast("排版设置保存完毕");
         });
     });
@@ -432,7 +433,11 @@ function displayPage() {
         if (!ok) {
             return;
         }
-        chrome.storage.local.set({ "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 }, function () {
+        dir = false;
+        twocolumn = true;
+        $('#reader-dir').prop('checked', dir);
+        $('#two-column').prop('checked', twocolumn);
+        chrome.storage.local.set({ "fontsize": 16, "linespacing": 1.6, "contentwidth": 960, "dir": dir, "twocolumn": twocolumn }, function () {
             showToast("排版已重置为默认值");
             setTimeout(function () {
                 window.location.reload();

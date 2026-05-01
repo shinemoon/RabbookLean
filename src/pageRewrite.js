@@ -8,8 +8,100 @@
     }
 })();
 
+// 分页纵向缓冲参数（可直接调节）
+var PAGINATION_VERTICAL_BUFFER_BASE_PX = 12;
+var PAGINATION_VERTICAL_BUFFER_LINE_RATIO = 0.55;
+var PAGINATION_VERTICAL_BUFFER_COMPENSATION_PX = 8;
+var PAGINATION_VERTICAL_BUFFER_REFERENCE_FONT_PX = 30;
+var PAGINATION_VERTICAL_BUFFER_MIN_SCALE = 0.4;
+
 function lastpage() {
     return $("#currentindex").text() == $("#totalindex").text();
+}
+
+function createReaderEngine($container, options) {
+    options = options || {};
+    var $floors = $container.find('.bb-item');
+    var state = {
+        floor: 0,
+        floorCount: $floors.length,
+        loop: !!options.loop,
+    };
+    var listeners = {
+        scrollStart: [],
+        scrollEnd: [],
+    };
+
+    function emit(type, payload) {
+        var cbs = listeners[type] || [];
+        for (var i = 0; i < cbs.length; i++) {
+            cbs[i](null, payload);
+        }
+    }
+
+    function clampFloor(floor) {
+        if (state.floorCount <= 0) {
+            return 0;
+        }
+        if (state.loop) {
+            return (floor + state.floorCount) % state.floorCount;
+        }
+        if (floor < 0) {
+            return 0;
+        }
+        if (floor >= state.floorCount) {
+            return state.floorCount - 1;
+        }
+        return floor;
+    }
+
+    function renderFloor(floor) {
+        if (state.floorCount <= 0) {
+            return;
+        }
+        var from = state.floor;
+        var to = clampFloor(floor);
+        emit('scrollStart', { from: from, to: to });
+
+        state.floor = to;
+        $floors.hide().attr('aria-hidden', 'true');
+        $floors.eq(to).show().attr('aria-hidden', 'false');
+
+        emit('scrollEnd', { from: from, to: to });
+    }
+
+    function refresh() {
+        $floors = $container.find('.bb-item');
+        state.floorCount = $floors.length;
+        renderFloor(state.floor);
+    }
+
+    refresh();
+
+    return {
+        on: function (type, cb) {
+            if (!listeners[type]) {
+                listeners[type] = [];
+            }
+            listeners[type].push(cb);
+        },
+        next: function () {
+            renderFloor(state.floor + 1);
+        },
+        prev: function () {
+            renderFloor(state.floor - 1);
+        },
+        scrollToFloor: function (floor) {
+            renderFloor(parseInt(floor, 10) || 0);
+        },
+        getFloor: function () {
+            return state.floor;
+        },
+        getFloorCount: function () {
+            return state.floorCount;
+        },
+        refresh: refresh,
+    };
 }
 
 function rewritePage(url, startp) {
@@ -75,6 +167,9 @@ function rewritePage(url, startp) {
 
     //Content
     $('body').append($(loadedContent[4]));
+    if ($('#gnContent').length > 0) {
+        $('#gnContent').wrap('<div id="rbNightLayer"></div>');
+    }
     $('body').find('a').remove();
 
     //Navigation
@@ -142,9 +237,9 @@ function rewritePage(url, startp) {
                 if (lastpage())
                     detectBottom();
                 else
-                    ascensorInstance.next();
+                    readerEngineInstance.next();
             } else if (event.key === "k" || event.key === "ArrowLeft" || event.key === "PageUp") {
-                ascensorInstance.prev();
+                readerEngineInstance.prev();
             } else if (event.key === "l" || event.key === "ArrowDown") {
                 rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
                 $('.fetchnext').click();
@@ -156,13 +251,13 @@ function rewritePage(url, startp) {
                 var tofloor = prompt("请输入跳转页数", "");
                 if (tofloor < 1 || tofloor > pages) {
                     if (tofloor < 1) {
-                        ascensorInstance.scrollToFloor(0);
+                        readerEngineInstance.scrollToFloor(0);
                     }
                     if (tofloor > pages) {
-                        ascensorInstance.scrollToFloor(pages - 1);
+                        readerEngineInstance.scrollToFloor(pages - 1);
                     }
                 } else {
-                    ascensorInstance.scrollToFloor(parseInt(tofloor) - 1);
+                    readerEngineInstance.scrollToFloor(parseInt(tofloor) - 1);
                 }
             }
         }
@@ -194,26 +289,23 @@ function rewritePage(url, startp) {
     window.scrollTo(0, 0);
     // 切换
     function toggleNightMode(enable) {
-        const body = document.body;
+        var body = document.body;
         if (enable) {
-            body.style.filter = "invert(0.8) hue-rotate(180deg)";
+            body.classList.add('rb-night-invert');
             $('#switch').removeClass("icon-toggle-on").addClass("icon-toggle-off");
         } else {
-            body.style.filter = "none";
+            body.classList.remove('rb-night-invert');
             $('#switch').removeClass("icon-toggle-off").addClass("icon-toggle-on");
         }
         // Send update
-        port.postMessage({ type: "configupdate", innight:inNight});
+        inNight = !!enable;
+        port.postMessage({ type: "configupdate", innight: inNight });
 
     }
 
     // Switch day/night
     $('#switch').unbind('click').bind('click', function () {
-        if ($(this).hasClass("icon-toggle-on")) {
-            inNight = true;
-        } else {
-            inNight = false;
-        }
+        inNight = !inNight;
         toggleNightMode(inNight);
     });
 
@@ -237,11 +329,16 @@ function rewritePage(url, startp) {
         loadPrevPage();
     });
 
+    var readerEngineHooked = false;
     function bindScrollAction(tout = false) {
+        if (!readerEngineInstance || readerEngineHooked) {
+            return;
+        }
+        readerEngineHooked = true;
         /*
         //Bind the scrollevent
         */
-        ascensor.on("scrollEnd", function (e, floor) {
+        readerEngineInstance.on("scrollEnd", function (e, floor) {
             $('#currentindex').text(parseInt(floor.to) + 1);
             $('#totalindex').text(pages);
             progress = (floor.to) / pages;
@@ -255,7 +352,7 @@ function rewritePage(url, startp) {
                     notinpaging = true;
                 }, PGTIME);
         });
-        ascensor.on("scrollStart", function (e, floor) {
+        readerEngineInstance.on("scrollStart", function (e, floor) {
             if (tout)
                 notinpaging = false;
         });
@@ -267,14 +364,14 @@ function rewritePage(url, startp) {
         // Page Turn Navigator Click
         //
         $('#pup').unbind('click').bind('click', function () {
-            ascensorInstance.prev();
+            readerEngineInstance.prev();
         });
 
         $('#pdown').unbind('click').bind('click', function () {
             if (lastpage())
                 detectBottom();
             else
-                ascensorInstance.next();
+                readerEngineInstance.next();
         });
 
     };
@@ -301,7 +398,7 @@ function rewritePage(url, startp) {
                     if (lastpage())
                         detectBottom();
                     else
-                        ascensorInstance.next();
+                        readerEngineInstance.next();
 
                     //pagedown
                 }
@@ -313,7 +410,7 @@ function rewritePage(url, startp) {
                 if (sumDelta > -4) {
                     sumDelta = 0;
                     //$('.fetchnext').click();
-                    ascensorInstance.prev();
+                    readerEngineInstance.prev();
                     //pageup
                 }
                 sumDelta = 0;
@@ -341,7 +438,70 @@ function rewritePage(url, startp) {
 
 
     // 在内容重置前保存容器高度（之后 #gnContent 会被 hide，height() 返回 0）
+    // 这里不仅要看容器理论高度，还要看真实视口可见区域，避免 fixed 顶栏/底栏遮挡导致分页行数偏大。
     var gnContentHeight = $('#gnContent').height();
+    function computeVisibleContentHeight() {
+        var node = $('#gnContent')[0];
+        if (!node) {
+            return gnContentHeight || 0;
+        }
+
+        var rect = node.getBoundingClientRect();
+        var visibleTop = Math.max(rect.top, 0);
+        var visibleBottom = Math.min(rect.bottom, window.innerHeight);
+        var visible = Math.max(0, visibleBottom - visibleTop);
+
+        function overlapWithFixed(selector) {
+            var el = $(selector)[0];
+            if (!el) {
+                return 0;
+            }
+            var st = window.getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden' || st.position !== 'fixed') {
+                return 0;
+            }
+            var r = el.getBoundingClientRect();
+            var top = Math.max(rect.top, r.top);
+            var bottom = Math.min(rect.bottom, r.bottom);
+            return Math.max(0, bottom - top);
+        }
+
+        // fixed 叠层会遮住正文可见区域，需要扣除。
+        visible -= overlapWithFixed('#lrbk_title');
+        visible -= overlapWithFixed('#nav');
+
+        return Math.max(0, visible);
+    }
+    var gnContentNode = $('#gnContent')[0];
+    var gnComputedStyle = gnContentNode ? window.getComputedStyle(gnContentNode) : null;
+    var inputFontSize = parseFloat(rfontsize);
+    var inputLineSpacing = parseFloat(rlinespacing);
+
+    // 分页参数以用户输入为最高优先级，避免“样式尚未落地”导致计算偏差。
+    var resolvedFontSize = isFinite(inputFontSize) && inputFontSize > 0
+        ? inputFontSize
+        : (gnComputedStyle ? parseFloat(gnComputedStyle.fontSize) : 16);
+    if (!isFinite(resolvedFontSize) || resolvedFontSize <= 0) {
+        resolvedFontSize = 16;
+    }
+
+    var resolvedLineHeight;
+    if (isFinite(inputLineSpacing) && inputLineSpacing > 0) {
+        resolvedLineHeight = resolvedFontSize * inputLineSpacing;
+    } else {
+        resolvedLineHeight = gnComputedStyle ? parseFloat(gnComputedStyle.lineHeight) : NaN;
+        if (!isFinite(resolvedLineHeight) || resolvedLineHeight <= 0) {
+            resolvedLineHeight = resolvedFontSize * 1.6;
+        }
+    }
+    var rootReaderWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--reader-content-width'));
+    var resolvedContentWidth = isFinite(rootReaderWidth) && rootReaderWidth > 0 ? rootReaderWidth : (rcontentwidth || 960);
+    var layoutConfig = {
+        fontSize: resolvedFontSize,
+        lineHeight: resolvedLineHeight,
+        contentWidth: resolvedContentWidth,
+        twoColumn: !!rtwocolumn
+    };
 
     // 从原始内容中剥离所有内联事件属性，防止残留 onclick 跳广告
     (function stripInlineEvents(htmlStr) {
@@ -354,12 +514,85 @@ function rewritePage(url, startp) {
     })(loadedContent[4]);
 
     // Refine the text
-    var wwidth = $(window).width();
+    // #gnContent 已由 margin:auto 居中，避免再额外叠加窗口级 sidepadding。
+    var targetMaxWidth = layoutConfig.twoColumn ? (layoutConfig.contentWidth * 2) : layoutConfig.contentWidth;
+    $('#gnContent').css('max-width', targetMaxWidth + 'px');
 
-    var expectwidth = rtwocolumn ? (rcontentwidth * 2) : rcontentwidth; // Use configured content width
-    // Calculate the padding ;
-    if (wwidth <= expectwidth) expectwidth = wwidth;
-    var sidepadding = (wwidth - expectwidth) / 2;
+    var expectwidth = parseFloat($('#gnContent').innerWidth());
+    if (!isFinite(expectwidth) || expectwidth <= 0) {
+        expectwidth = targetMaxWidth;
+    }
+    var sidepadding = 0;
+    var twoColumnGap = 0;
+    var columnWidth = expectwidth;
+    var textMeasureWidth = expectwidth;
+    var probedLineHeight = NaN;
+    var measuredLetterSpacingPx = 0;
+    var measuredWordSpacingPx = 0;
+    if (layoutConfig.twoColumn) {
+        var minColumnWidth = 280;
+        var adaptiveGap = Math.round(expectwidth * 0.03);
+        var maxGapByWidth = Math.max(0, expectwidth - (minColumnWidth * 2));
+        twoColumnGap = Math.min(24, adaptiveGap, maxGapByWidth);
+        if (!isFinite(twoColumnGap) || twoColumnGap < 0) {
+            twoColumnGap = 0;
+        }
+        $('#gnContent').css('--reader-two-column-gap', twoColumnGap + 'px');
+        columnWidth = (expectwidth - twoColumnGap) / 2;
+        if (!isFinite(columnWidth) || columnWidth <= 0) {
+            columnWidth = expectwidth / 2;
+        }
+
+        // 使用真实双栏样式探针获取“列内容宽度 + 行高”，避免 padding/border 导致每行估算过宽。
+        var $layoutProbe = $('<div class="bb-item two-column-item" style="position:absolute;visibility:hidden;left:-9999px;top:0;overflow:hidden;"></div>').appendTo('#gnContent');
+        $layoutProbe.css({
+            width: expectwidth + 'px',
+            fontSize: resolvedFontSize + 'px',
+            lineHeight: resolvedLineHeight + 'px',
+            fontFamily: gnComputedStyle ? gnComputedStyle.fontFamily : undefined,
+            letterSpacing: gnComputedStyle ? gnComputedStyle.letterSpacing : undefined,
+            wordSpacing: gnComputedStyle ? gnComputedStyle.wordSpacing : undefined,
+        });
+        $layoutProbe.append('<div class="left-page column"><p class="fake-p">测</p><p class="fake-p">测</p></div>');
+        $layoutProbe.append('<div class="right-page column"><p class="fake-p">测</p><p class="fake-p">测</p></div>');
+
+        var $probeLeftCol = $layoutProbe.find('.left-page').first();
+        var $probeRightCol = $layoutProbe.find('.right-page').first();
+        var probeLeftWidth = parseFloat($probeLeftCol.width());
+        var probeRightWidth = parseFloat($probeRightCol.width());
+        var probeWidth = Math.min(
+            isFinite(probeLeftWidth) && probeLeftWidth > 0 ? probeLeftWidth : Number.POSITIVE_INFINITY,
+            isFinite(probeRightWidth) && probeRightWidth > 0 ? probeRightWidth : Number.POSITIVE_INFINITY
+        );
+        if (isFinite(probeWidth) && probeWidth > 0 && probeWidth < Number.POSITIVE_INFINITY) {
+            textMeasureWidth = probeWidth;
+        } else {
+            textMeasureWidth = columnWidth;
+        }
+
+        var $probeP1 = $probeLeftCol.find('p').eq(0);
+        var $probeP2 = $probeLeftCol.find('p').eq(1);
+        var $probeRightP = $probeRightCol.find('p').eq(0);
+        if ($probeP1.length > 0 && $probeP2.length > 0) {
+            var probeRect1 = $probeP1[0].getBoundingClientRect();
+            var probeRect2 = $probeP2[0].getBoundingClientRect();
+            var probeOffset = probeRect2.top - probeRect1.top;
+            if (isFinite(probeOffset) && probeOffset > 0) {
+                probedLineHeight = Math.ceil(probeOffset) + 2;
+            }
+        }
+        if ($probeRightP.length > 0) {
+            var rightPStyle = window.getComputedStyle($probeRightP[0]);
+            var ls = parseFloat(rightPStyle.letterSpacing);
+            var ws = parseFloat(rightPStyle.wordSpacing);
+            measuredLetterSpacingPx = isFinite(ls) ? ls : 0;
+            measuredWordSpacingPx = isFinite(ws) ? ws : 0;
+        }
+        $layoutProbe.remove();
+    } else {
+        $('#gnContent').css('--reader-two-column-gap', '0px');
+        textMeasureWidth = expectwidth;
+    }
 
     //var curContent = $('#gnContent').html();
     var curContent = loadedContent[4];
@@ -368,29 +601,69 @@ function rewritePage(url, startp) {
     // 测量行高：相邻两个 <p> 的 offsetTop 差 = lineHeight + 折叠后的 margin
     // outerHeight(true) 会将上下边距重复累加（16+16=32px），但实际渲染中 margin 会折叠（仅保留 16px），
     // 因此用 offsetTop 差才能反映真实的每行占用高度
-    var $tempWrapper = $('<div class="bb-item" style="position:absolute;visibility:hidden;left:-9999px;overflow:hidden;"></div>').appendTo('body');
+    var $tempWrapper = $('<div class="bb-item" style="position:absolute;visibility:hidden;left:-9999px;overflow:hidden;"></div>').appendTo('#gnContent');
+    $tempWrapper.css({
+        fontSize: layoutConfig.fontSize + 'px',
+        lineHeight: layoutConfig.lineHeight + 'px',
+        width: (layoutConfig.twoColumn ? textMeasureWidth : expectwidth) + 'px',
+        fontFamily: gnComputedStyle ? gnComputedStyle.fontFamily : undefined,
+        letterSpacing: gnComputedStyle ? gnComputedStyle.letterSpacing : undefined,
+        wordSpacing: gnComputedStyle ? gnComputedStyle.wordSpacing : undefined,
+    });
     var $tempP1 = $('<p class="fake-p">测</p>').appendTo($tempWrapper);
     var $tempP2 = $('<p class="fake-p">测</p>').appendTo($tempWrapper);
-    var lheight = $tempP2[0].offsetTop - $tempP1[0].offsetTop + 1; // +1 防止最后一行被 overflow:hidden 截断
-    var fwidth = parseInt($tempP1.css('font-size'));
+    var lheight = Math.ceil($tempP2[0].getBoundingClientRect().top - $tempP1[0].getBoundingClientRect().top) + 2;
+    var fwidth = parseFloat($tempP1.css('font-size'));
     $tempWrapper.remove();
+    if (isFinite(probedLineHeight) && probedLineHeight > 0) {
+        lheight = probedLineHeight;
+    }
+    if (!isFinite(fwidth) || fwidth <= 0) {
+        fwidth = layoutConfig.fontSize;
+    }
 
     $('#gnContent').hide();
     var linerized = Convert(curContent);
     $('#gnContent').html(linerized.join(''));
 
-    // 精确计算可用高度：使用 hide() 前保存的 gnContentHeight (CSS: calc(100% - 60px) box-sizing:border-box)
-    // 减去 4px 余量防止最后一行被 overflow:hidden 截断
-    var availHeight = gnContentHeight - 4;
+    // 用“随字体缩放的固定项 + 行高比例 + 手动补偿”动态计算纵向安全余量。
+    // 以 30px 为当前基准保持现状，小字号按比例减少底部留白，尽量控制在接近一行空白。
+    var verticalBufferFontScale = resolvedFontSize / PAGINATION_VERTICAL_BUFFER_REFERENCE_FONT_PX;
+    if (!isFinite(verticalBufferFontScale) || verticalBufferFontScale <= 0) {
+        verticalBufferFontScale = 1;
+    }
+    verticalBufferFontScale = Math.max(PAGINATION_VERTICAL_BUFFER_MIN_SCALE, verticalBufferFontScale);
+
+    var verticalBufferFixedPart = (
+        PAGINATION_VERTICAL_BUFFER_BASE_PX +
+        PAGINATION_VERTICAL_BUFFER_COMPENSATION_PX
+    ) * verticalBufferFontScale;
+
+    var verticalSafetyBuffer = Math.ceil(
+        verticalBufferFixedPart +
+        (lheight * PAGINATION_VERTICAL_BUFFER_LINE_RATIO)
+    );
+    if (!isFinite(verticalSafetyBuffer) || verticalSafetyBuffer < 0) {
+        verticalSafetyBuffer = 24;
+    }
+
+    // 用真实可见高度计算可分页区域，而不是仅使用容器理论高度。
+    // 再减去动态安全余量，防止最后一行被 overflow:hidden 截断。
+    var availHeight = computeVisibleContentHeight() - verticalSafetyBuffer;
+    if (!isFinite(availHeight) || availHeight <= 0) {
+        availHeight = gnContentHeight - verticalSafetyBuffer;
+    }
 
     //容纳行数
     //每行字数
     var chcnt;
-    if (rtwocolumn) {
-        chcnt = parseInt((expectwidth - 400) / fwidth);
-        chcnt = parseInt(chcnt / 2);
+    if (layoutConfig.twoColumn) {
+        chcnt = parseInt((textMeasureWidth - 12) / fwidth);
     } else {
-        chcnt = parseInt((rcontentwidth - 20) / fwidth);
+        chcnt = parseInt((expectwidth - 20) / fwidth);
+    }
+    if (!isFinite(chcnt) || chcnt < 1) {
+        chcnt = 1;
     }
 
     // 输入行数
@@ -404,110 +677,243 @@ function rewritePage(url, startp) {
     var pagedinfo = $("<div></div>");
     var directionarray = [];
 
-    // 重新生成以及打断字符段落
-    // 定义存储结果的新数组
-    var sortedlines = [];
+    function splitLinesByCharCount(charCountToUse) {
+        var out = [];
+        var safeCharCount = Math.max(1, parseInt(charCountToUse, 10) || 1);
+        var horizontalSafetyPx = layoutConfig.twoColumn ? 14 : 10;
+        var safeLineWidth = Math.max(1, (layoutConfig.twoColumn ? textMeasureWidth : expectwidth) - horizontalSafetyPx);
+
+        var measureCanvas = document.createElement('canvas');
+        var measureCtx = measureCanvas.getContext('2d');
+        var gnStyle = window.getComputedStyle(document.getElementById('gnContent'));
+        var fontStyle = gnStyle.fontStyle || 'normal';
+        var fontVariant = gnStyle.fontVariant || 'normal';
+        var fontWeight = gnStyle.fontWeight || '400';
+        var fontSize = (parseFloat(gnStyle.fontSize) || layoutConfig.fontSize || 16) + 'px';
+        var fontFamily = gnStyle.fontFamily || 'serif';
+        if (measureCtx) {
+            measureCtx.font = fontStyle + ' ' + fontVariant + ' ' + fontWeight + ' ' + fontSize + ' ' + fontFamily;
+        }
+
+        function measuredWidth(s) {
+            if (!measureCtx) {
+                return s.length * fwidth;
+            }
+            var base = measureCtx.measureText(s).width;
+            var letterExtra = Math.max(0, s.length - 1) * measuredLetterSpacingPx;
+            var spaces = (s.match(/\s/g) || []).length;
+            var wordExtra = spaces * measuredWordSpacingPx;
+            return base + letterExtra + wordExtra + 1;
+        }
+
+        function splitTextToFit(text) {
+            var result = [];
+            var ptr = 0;
+            while (ptr < text.length) {
+                var remain = text.length - ptr;
+                var take = Math.min(safeCharCount, remain);
+                var candidate = text.substring(ptr, ptr + take);
+                if (measuredWidth(candidate) <= safeLineWidth) {
+                    result.push(candidate);
+                    ptr += take;
+                    continue;
+                }
+
+                var lo = 1;
+                var hi = take;
+                var best = 1;
+                while (lo <= hi) {
+                    var mid = Math.floor((lo + hi) / 2);
+                    var midText = text.substring(ptr, ptr + mid);
+                    if (measuredWidth(midText) <= safeLineWidth) {
+                        best = mid;
+                        lo = mid + 1;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+                result.push(text.substring(ptr, ptr + best));
+                ptr += best;
+            }
+            return result;
+        }
+
+        newlines.forEach(line => {
+            var text = line.replace(/<p[^>]*>|<\/p>/g, "");
+            var parts = splitTextToFit(text);
+            parts.forEach(function (part) {
+                out.push("<p class='fake-p'>" + part + "</p>");
+            });
+        });
+        return out;
+    }
+
+    var sortedlines = splitLinesByCharCount(chcnt);
     console.debug("Line Count: " + linecnt + "; Every Line: " + chcnt);
 
-    // 遍历每一段内容
-    newlines.forEach(line => {
-        // 移除段落标签，提取纯文本
-        var text = line.replace(/<p[^>]*>|<\/p>/g, "");
-        // 分段
-        while (text.length > 0) {
-            // 提取当前段落的一部分，不超过chcnt
-            var part = text.substring(0, chcnt);
-            // 将当前部分重新包装成段落并推入新数组
-            sortedlines.push(`<p class='fake-p'>${part}</p>`);
-            // 移除已处理的部分
-            text = text.substring(chcnt);
-        }
-        // 在每个原始的段落后面插入一个空段落 (暂时不做，太空了)
-        //sortedlines.push("<p class='true-p'>&nbsp</p>");
-    });
 
+    function buildPagedInfoWithLineCount(lineCountToUse) {
+        var paged = $("<div></div>");
+        var direction = [];
+        var totalPagesForBuild = 0;
+        var inPagingLocal = true;
+        var lineptrLocal = 0;
 
-    //接下来是把sortedllines分成N页，每页linecnt行
-
-    //计算页数
-    var inPaging = true;
-    var lineptr = 0;
-    var pages = 0;
-    if (rtwocolumn) {
-        // 双栏模式：每屏（bb-item）显示两页（左栏=第N页，右栏=第N+1页）
-        // 先将 sortedlines 按 linecnt 行一组切分成单页
-        var pageBlocks = [];
-        var pagePtr = 0;
-        while (pagePtr < sortedlines.length) {
-            pageBlocks.push(sortedlines.slice(pagePtr, pagePtr + linecnt));
-            pagePtr += linecnt;
-        }
-        var totalPages = pageBlocks.length;
-        // 每两页一组放入一个 bb-item
-        for (var i = 0; i < totalPages; i += 2) {
-            pages++;
-            pagedinfo.append($("<div class='bb-item two-column-item' index=" + i + "></div>"));
-            if (pages % 2 == 1) pagedinfo.find('.bb-item').last().addClass('odd-page');
-            if (rdir) {
-                directionarray.push([0, i]);
-            } else {
-                directionarray.push([i, 0]);
+        if (layoutConfig.twoColumn) {
+            var pageBlocks = [];
+            var pagePtr = 0;
+            while (pagePtr < sortedlines.length) {
+                pageBlocks.push(sortedlines.slice(pagePtr, pagePtr + lineCountToUse));
+                pagePtr += lineCountToUse;
             }
-            pagedinfo.find('.bb-item').last().append("<div class='left-page column'></div>");
-            pagedinfo.find('.bb-item').last().append("<div class='right-page column'></div>");
-            // 左栏 = 第i页
-            pagedinfo.find('.bb-item .left-page').last().append(pageBlocks[i]);
-            // 右栏 = 第i+1页（如果存在）
-            if (i + 1 < totalPages) {
-                pagedinfo.find('.bb-item .right-page').last().append(pageBlocks[i + 1]);
+            var totalPages = pageBlocks.length;
+            for (var idx = 0; idx < totalPages; idx += 2) {
+                totalPagesForBuild++;
+                paged.append($("<div class='bb-item two-column-item' index=" + idx + "></div>"));
+                if (totalPagesForBuild % 2 == 1) paged.find('.bb-item').last().addClass('odd-page');
+                if (rdir) {
+                    direction.push([0, idx]);
+                } else {
+                    direction.push([idx, 0]);
+                }
+                paged.find('.bb-item').last().append("<div class='left-page column'></div>");
+                paged.find('.bb-item').last().append("<div class='right-page column'></div>");
+                paged.find('.bb-item .left-page').last().append(pageBlocks[idx]);
+                if (idx + 1 < totalPages) {
+                    paged.find('.bb-item .right-page').last().append(pageBlocks[idx + 1]);
+                }
             }
-        }
-    } else {
-        for (var i = 0; inPaging; i++) {
-            pages++;
-            pagedinfo.append($("<div class='bb-item' index=" + i + "></div>"));
-            if (i % 2 == 0) pagedinfo.find('.bb-item').last().addClass('odd-page');
-            if (rdir) {
-                directionarray.push([0, i]);
-            } else {
-                directionarray.push([i, 0]);
-            }
-            pagedinfo.find('.bb-item').last().append("<div class='left-page column'></div>");
-            pagedinfo.find('.bb-item').last().append("<div class='right-page column'></div>");
-            for (var j = 0; j < linecnt; j++) {
-                if (j < linecnt / 2)
-                    pagedinfo.find('.bb-item .left-page').last().append(sortedlines[lineptr]);
-                else
-                    pagedinfo.find('.bb-item .right-page').last().append(sortedlines[lineptr]);
-                if (lineptr++ == sortedlines.length) {
-                    inPaging = false;
-                    break;
+        } else {
+            for (var i = 0; inPagingLocal; i++) {
+                totalPagesForBuild++;
+                paged.append($("<div class='bb-item' index=" + i + "></div>"));
+                if (i % 2 == 0) paged.find('.bb-item').last().addClass('odd-page');
+                if (rdir) {
+                    direction.push([0, i]);
+                } else {
+                    direction.push([i, 0]);
+                }
+                paged.find('.bb-item').last().append("<div class='left-page column'></div>");
+                paged.find('.bb-item').last().append("<div class='right-page column'></div>");
+                for (var j = 0; j < lineCountToUse; j++) {
+                    if (j < lineCountToUse / 2)
+                        paged.find('.bb-item .left-page').last().append(sortedlines[lineptrLocal]);
+                    else
+                        paged.find('.bb-item .right-page').last().append(sortedlines[lineptrLocal]);
+                    if (lineptrLocal++ == sortedlines.length) {
+                        inPagingLocal = false;
+                        break;
+                    }
                 }
             }
         }
+
+        return {
+            pagedinfo: paged,
+            directionarray: direction,
+            pages: totalPagesForBuild,
+        };
     }
 
+    function applyPagedInfoToDom(buildOut) {
+        $('#gnContent').empty().append(buildOut.pagedinfo.html());
+        var runtimePageHeight = Math.max(1, Math.floor(availHeight));
+        $('#gnContent').find('.bb-item').css('width', expectwidth + "px");
+        $('#gnContent').find('.bb-item').css('height', runtimePageHeight + "px");
+        $('#gnContent').find('.bb-item').css('padding-right', sidepadding);
+        $('#gnContent').find('.bb-item').css('padding-left', sidepadding);
+    }
 
-    $('#gnContent').empty().append(pagedinfo.html());
-    $('#gnContent').find('.bb-item').css('width', expectwidth + "px");
-    $('#gnContent').find('.bb-item').css('padding-right', sidepadding);
-    $('#gnContent').find('.bb-item').css('padding-left', sidepadding);
+    function detectRenderedOverflow() {
+        var overflowFound = { vertical: false, horizontal: false };
+        $('#gnContent').find('.bb-item').each(function () {
+            if (this.scrollHeight > this.clientHeight + 1) {
+                overflowFound.vertical = true;
+                return false;
+            }
+            $(this).find('.column').each(function () {
+                if (this.scrollHeight > this.clientHeight + 1) {
+                    overflowFound.vertical = true;
+                    return false;
+                }
+
+                var fakePs = $(this).find('p.fake-p');
+                for (var i = 0; i < fakePs.length; i++) {
+                    var p = fakePs[i];
+                    if (p.scrollWidth > p.clientWidth + 1) {
+                        overflowFound.horizontal = true;
+                        break;
+                    }
+                }
+
+                if (this.scrollWidth > this.clientWidth + 1) {
+                    overflowFound.horizontal = true;
+                }
+
+                if (overflowFound.vertical || overflowFound.horizontal) {
+                    return false;
+                }
+            });
+            if (overflowFound.vertical || overflowFound.horizontal) {
+                return false;
+            }
+        });
+        return overflowFound;
+    }
+
+    var pagingTry = 0;
+    var maxPagingTry = 40;
+    var workingLineCnt = Math.max(1, linecnt);
+    var workingCharCnt = Math.max(1, chcnt);
+    var buildResult;
+    do {
+        sortedlines = splitLinesByCharCount(workingCharCnt);
+        pagedinfo = $("<div></div>");
+        directionarray = [];
+        buildResult = buildPagedInfoWithLineCount(workingLineCnt);
+        applyPagedInfoToDom(buildResult);
+
+        var overflowState = detectRenderedOverflow();
+        if (!overflowState.vertical && !overflowState.horizontal) {
+            break;
+        }
+
+        var progressed = false;
+        if (overflowState.horizontal && workingCharCnt > 1) {
+            workingCharCnt = Math.max(1, workingCharCnt - 1);
+            progressed = true;
+        }
+        if (overflowState.vertical && workingLineCnt > 1) {
+            workingLineCnt = Math.max(1, workingLineCnt - 1);
+            progressed = true;
+        }
+        if (!progressed) {
+            break;
+        }
+        pagingTry++;
+    } while (pagingTry < maxPagingTry && (workingLineCnt > 1 || workingCharCnt > 1));
+
+    linecnt = workingLineCnt;
+    chcnt = workingCharCnt;
+
+    pages = buildResult.pages;
+    directionarray = buildResult.directionarray;
 
 
     $('#gnContent').attr('pages', pages);
 
-    //var ascensor = $('#gnContent').ascensor();
-    var ascensor = $('#gnContent').ascensor({ time: 200, easing: 'easeInOutCirc', height: '100%', wheelNavigation: false, direction: directionarray });
-    ascensorInstance = ascensor.data('ascensor');   // Access instance
+    var readerEngineOptions = { layoutConfig: layoutConfig, direction: directionarray, loop: false };
+    readerEngineInstance = createReaderEngine($('#gnContent'), readerEngineOptions);
 
     $('#currentindex').text('1');
     $('#totalindex').text(pages);
+    bindScrollAction();
 
     // Calculate the progress pages.
 
     if (startp != 0) {
         var curfloor = parseInt(startp * pages);
-        ascensorInstance.scrollToFloor(curfloor);
+        readerEngineInstance.scrollToFloor(curfloor);
         $('#currentindex').text(parseInt(curfloor) + 1);
     }
     $('#gnContent').show();

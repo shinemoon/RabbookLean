@@ -30,9 +30,12 @@ body {
   line-height: var(--reader-line-height, 1.8);
   background: var(--color-bg) !important;
   height: calc(100% - 60px) !important;
+  padding: 20px 0 0;
   box-sizing: border-box;
+  max-width: var(--reader-content-width, 900px);
   left: 0;
   right: 0;
+  overflow: hidden;
 }
 
 /* ---- Top title bar ---- */
@@ -81,14 +84,14 @@ body {
 #tools {
   position: fixed !important;
   right: var(--space-3);
-  top: 50%;
+  top: 30px;
   transform: translateY(-50%);
   width: 44px;
   height: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  z-index: 997;
+  z-index: 999;
   align-items: center;
 }
 #tools span {
@@ -115,6 +118,47 @@ body {
 }
 #tools span:active {
   transform: scale(0.95);
+}
+
+/* ---- Night mode toggle icon fallback ---- */
+#switch {
+  font-size: 0;
+}
+#switch::before {
+  display: block;
+  font-size: 20px;
+  line-height: 1;
+  font-family: var(--font-sans);
+}
+#switch.icon-toggle-on::before {
+  content: "\25D0";
+}
+#switch.icon-toggle-off::before {
+  content: "\25D1";
+}
+
+/* ---- Night mode (CSS-only inversion) ---- */
+/* 全宽阅读层：用于承载正文反色，避免 body 级 filter 影响 fixed 定位 */
+#rbNightLayer {
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg) !important;
+  overflow: hidden;
+}
+
+body.rb-night-invert #rbNightLayer {
+  filter: invert(0.88) hue-rotate(180deg);
+  transform: translateZ(0);
+}
+
+body.rb-night-invert #lrbk_title,
+body.rb-night-invert #indexinfo,
+body.rb-night-invert #nav,
+body.rb-night-invert #tools,
+body.rb-night-invert #hint,
+body.rb-night-invert #pup,
+body.rb-night-invert #pdown {
+  filter: invert(0.88) hue-rotate(180deg);
 }
 
 /* ---- Bottom navigation ---- */
@@ -180,23 +224,47 @@ body {
   overflow: hidden !important;
   white-space: normal !important;
   color: var(--color-text) !important;
-  font-size: var(--reader-font-size, 1em) !important;
-  line-height: var(--reader-line-height, 1.8) !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  height: 100%;
+  box-sizing: border-box;
 }
 .bb-item.two-column-item {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--reader-two-column-gap, var(--space-6));
+  align-items: stretch;
 }
 .bb-item.two-column-item .column {
-  width: 50%;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
 }
 .bb-item.two-column-item .column.left-page {
   margin-left: 0;
   border-right: 1px solid var(--color-divider);
+  padding-left: var(--space-4);
   padding-right: var(--space-4);
 }
 .bb-item.two-column-item .column.right-page {
+  padding-right: var(--space-4);
   padding-left: var(--space-4);
+}
+
+/* ---- Pagination measurement lines ---- */
+#gnContent p.fake-p {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 /* ---- Bookblock containers ---- */

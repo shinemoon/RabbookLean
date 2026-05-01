@@ -11,6 +11,7 @@
     "zip": "npm run build && cd dist && bestzip ../rabbook-lean.zip *"
   },
   "dependencies": {
+    "@chenglou/pretext": "^0.0.6",
     "jquery": "^2.2.4",
     "jquery-easing": "^0.0.1",
     "jquery-mousewheel": "^3.2.2",

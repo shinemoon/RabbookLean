@@ -24,7 +24,7 @@
 })();
 
 // Page Parameter
-var ascensorInstance;   // Access instance
+var readerEngineInstance;   // Access instance
 var notinpaging = true; // Avoid wheel paging to fast
 var pgtimer = null;
 var PGTIME = 800;
