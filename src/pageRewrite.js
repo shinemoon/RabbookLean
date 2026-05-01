@@ -23,9 +23,6 @@ function rewritePage(url, startp) {
     console.log("Page Rewrite");
     loadedContent = buf.content;
 
-    if (rjs != null && rjs != "") {
-        eval(rjs);
-    }
     $('body').empty();
     // 在追加任何内容前，彻底清理原始页面 head/body 中的脚本
     // 阻止任何原始页面的脚本被保留或执行
@@ -103,6 +100,9 @@ function rewritePage(url, startp) {
     toggleNightMode(inNight);
 
     $('body').find('[style]').not('#ppage, #npage').removeAttr('style');
+
+    // 自定义脚本改为由 sandbox 处理 loadedContent 后再回传，
+    // 这里不再在页面上下文执行用户脚本，避免触发页面 CSP。
 
     // === 增强清理：清除原始页面的残留 ===
     // 清除所有定时器

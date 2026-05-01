@@ -153,6 +153,14 @@ var scrollCnt = 0;
 
 
 var inNight = false;
+var contentProcessSeq = 0;
+var pendingContentProcess = {};
+var sandboxIframe = null;
+var sandboxReady = false;
+var sandboxInitStarted = false;
+var sandboxInitFailed = false;
+var sandboxReadyCallbacks = [];
+var sandboxBridgeReady = false;
 
 // Page elements
 //To detect bottom reach event
@@ -198,25 +206,215 @@ function handlePage(startp) {
     var r = $('body').html();
     //If current url is also handled then r is different
 
-    handleContent(r, cururl);
-    rewritePage(cururl, startp);
+    handleContent(r, cururl, function () {
+        rewritePage(cururl, startp);
+    });
 };
+
+function extractNavHref(navData) {
+    if (!navData) {
+        return '';
+    }
+    if (navData.length > 0 && navData[0]) {
+        if (typeof navData[0].getAttribute === 'function') {
+            return navData[0].getAttribute('href') || '';
+        }
+        if (navData[0].href) {
+            return navData[0].href;
+        }
+    }
+    return '';
+}
+
+function serializeLoadedContentForSandbox(loaded) {
+    return {
+        title: loaded[0] || '',
+        prevHref: extractNavHref(loaded[2]),
+        nextHref: extractNavHref(loaded[3]),
+        contentHtml: loaded[4] || ''
+    };
+}
+
+function deserializeLoadedContentFromSandbox(payload, fallbackLoaded) {
+    var out = payload || {};
+    var prev = [];
+    var next = [];
+
+    if (out.prevHref) {
+        var prevA = document.createElement('a');
+        prevA.setAttribute('href', out.prevHref);
+        prev.push(prevA);
+    }
+    if (out.nextHref) {
+        var nextA = document.createElement('a');
+        nextA.setAttribute('href', out.nextHref);
+        next.push(nextA);
+    }
+
+    return [
+        out.title != null ? out.title : fallbackLoaded[0],
+        null,
+        prev,
+        next,
+        out.contentHtml != null ? out.contentHtml : fallbackLoaded[4]
+    ];
+}
+
+function initSandboxBridge() {
+    if (sandboxBridgeReady) {
+        return;
+    }
+    sandboxBridgeReady = true;
+    window.addEventListener('message', function (event) {
+        if (!sandboxIframe || event.source !== sandboxIframe.contentWindow) {
+            return;
+        }
+        var msg = event.data || {};
+        if (msg.channel !== 'rabbook-sandbox') {
+            return;
+        }
+        if (msg.type === 'ready') {
+            sandboxReady = true;
+            sandboxInitFailed = false;
+            while (sandboxReadyCallbacks.length > 0) {
+                var cbReady = sandboxReadyCallbacks.shift();
+                cbReady(true);
+            }
+            return;
+        }
+        if (msg.type === 'result') {
+            var cb = pendingContentProcess[msg.requestId];
+            if (cb) {
+                delete pendingContentProcess[msg.requestId];
+                cb(msg);
+            }
+        }
+    });
+}
+
+function ensureSandboxReady(onReady) {
+    initSandboxBridge();
+
+    if (sandboxReady && sandboxIframe && sandboxIframe.contentWindow) {
+        onReady(true);
+        return;
+    }
+    if (sandboxInitFailed) {
+        onReady(false);
+        return;
+    }
+
+    sandboxReadyCallbacks.push(onReady);
+    if (sandboxInitStarted) {
+        return;
+    }
+
+    sandboxInitStarted = true;
+    try {
+        sandboxIframe = document.createElement('iframe');
+        sandboxIframe.id = 'lrbk-js-sandbox';
+        sandboxIframe.style.display = 'none';
+        sandboxIframe.setAttribute('aria-hidden', 'true');
+        sandboxIframe.src = chrome.runtime.getURL('src/sandbox.html');
+        (document.documentElement || document.body).appendChild(sandboxIframe);
+    } catch (e) {
+        sandboxInitFailed = true;
+        while (sandboxReadyCallbacks.length > 0) {
+            var cbFail = sandboxReadyCallbacks.shift();
+            cbFail(false);
+        }
+        return;
+    }
+
+    setTimeout(function () {
+        if (!sandboxReady) {
+            sandboxInitFailed = true;
+            while (sandboxReadyCallbacks.length > 0) {
+                var cbTimeout = sandboxReadyCallbacks.shift();
+                cbTimeout(false);
+            }
+        }
+    }, 1200);
+}
+
+function processLoadedContentViaSandbox(url, loaded, onDone) {
+    if (!rjs) {
+        onDone(loaded);
+        return;
+    }
+
+    ensureSandboxReady(function (ok) {
+        if (!ok || !sandboxIframe || !sandboxIframe.contentWindow) {
+            console.warn('Sandbox unavailable, using original loadedContent');
+            onDone(loaded);
+            return;
+        }
+
+        var requestId = generateShortHash(url + ':sandbox:' + (++contentProcessSeq));
+        var settled = false;
+        pendingContentProcess[requestId] = function (msg) {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            if (msg.ok && msg.payload) {
+                onDone(deserializeLoadedContentFromSandbox(msg.payload, loaded));
+                return;
+            }
+            if (msg.error) {
+                console.warn('Sandbox custom script skipped:', msg.error);
+            }
+            onDone(loaded);
+        };
+
+        setTimeout(function () {
+            if (!settled && pendingContentProcess[requestId]) {
+                settled = true;
+                delete pendingContentProcess[requestId];
+                console.warn('Sandbox custom script timeout, using original loadedContent');
+                onDone(loaded);
+            }
+        }, 1200);
+
+        try {
+            sandboxIframe.contentWindow.postMessage({
+                channel: 'rabbook-sandbox',
+                type: 'run',
+                requestId: requestId,
+                payload: serializeLoadedContentForSandbox(loaded),
+                script: rjs
+            }, '*');
+        } catch (e) {
+            delete pendingContentProcess[requestId];
+            console.warn('processLoadedContentViaSandbox failed:', e.message);
+            onDone(loaded);
+        }
+        });
+}
 
 
 // Handle the page content;
-function handleContent(bodytxt, url = null) {
+function handleContent(bodytxt, url = null, onReady = null) {
     // 先查找buffers有没有存好的! 如果已经解析过了，就不用去反复解析了 
     let buf = fetchBuf(generateShortHash(url));
     if (buf != null) {
         console.log('hit url');
         //        target = buf.content;
+        if (typeof onReady === 'function') onReady();
         return;
     }
+
+    // 在交给 jQuery 之前先做字符串级别的脚本剥离：
+    // jQuery 的 append(htmlString) 会立即执行 <script>，所以必须在 append 前清除，
+    // 而不是 append 之后再 find('script').remove()（那时脚本已经跑过了）。
+    bodytxt = bodytxt.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi, '');
+    // 同时预清理内联事件属性，防止 jQuery 解析时触发
+    bodytxt = bodytxt.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
 
     dummy = $("<div id='dummy'></div>");
     dummy.append(bodytxt);
 
-    //Remove all script elements and inline event handlers
+    //Remove all script elements and inline event handlers（二次保险）
     dummy.find('script').remove();
     dummy.find('[onload]').removeAttr('onload');
     dummy.find('[onerror]').removeAttr('onerror');
@@ -257,8 +455,11 @@ function handleContent(bodytxt, url = null) {
         cbody.find('iframe').css('display', 'none!important');
         //To extract the content and navigations
         let loaded = parseContent(cbody);
-        //And update the bufarray
-        pushBuf({ 'key': generateShortHash(url), 'content': loaded });
+        processLoadedContentViaSandbox(url, loaded, function (processedLoaded) {
+            //And update the bufarray
+            pushBuf({ 'key': generateShortHash(url), 'content': processedLoaded });
+            if (typeof onReady === 'function') onReady();
+        });
     }
 };
 
@@ -269,22 +470,24 @@ function loadPrevPage() {
     notinpaging = false;
     // Get content from iframe
     cururl = $('#ppage').prop('src');
-    handleContent(document.getElementById('ppage').contentWindow.document.body.innerHTML, cururl);
-    rewritePage(cururl, 0);
-    pgtimer = window.setTimeout(function () {
-        notinpaging = true;
-    }, PGTIME);
+    handleContent(document.getElementById('ppage').contentWindow.document.body.innerHTML, cururl, function () {
+        rewritePage(cururl, 0);
+        pgtimer = window.setTimeout(function () {
+            notinpaging = true;
+        }, PGTIME);
+    });
 };
 function loadNextPage() {
     window.clearTimeout(pgtimer);
     notinpaging = false;
     // Get content from iframe
     cururl = $('#npage').prop('src');
-    handleContent(document.getElementById('npage').contentWindow.document.body.innerHTML, cururl);
-    rewritePage(cururl, 0);
-    pgtimer = window.setTimeout(function () {
-        notinpaging = true;
-    }, PGTIME);
+    handleContent(document.getElementById('npage').contentWindow.document.body.innerHTML, cururl, function () {
+        rewritePage(cururl, 0);
+        pgtimer = window.setTimeout(function () {
+            notinpaging = true;
+        }, PGTIME);
+    });
 }
 /* 
 Judge the current page's status, i.e. if any prev/next page there 

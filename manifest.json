@@ -1,6 +1,6 @@
 ﻿{
 	"name": "LeanRabbook",
-	"version": "2.2",
+	"version": "3.0",
 	"description": "Auto Parser of Novel",
 	"short_name": "LRabook",
 	"manifest_version": 3,
@@ -15,6 +15,14 @@
 	},
 	"background": {
 		"service_worker": "src/background.js"
+	},
+	"sandbox": {
+		"pages": [
+			"src/sandbox.html"
+		]
+	},
+	"content_security_policy": {
+		"sandbox": "sandbox allow-scripts; script-src 'self' 'unsafe-eval'; child-src 'self';"
 	},
 	"web_accessible_resources": [
 		{
@@ -32,10 +40,12 @@
 				"src/details.css",
 				"src/details.js",
 				"src/html-handling.js",
-        "src/pageRewrite.js",
-        "src/jquery.js",
-        "src/reader-frame.html",
-        "src/reader-frame.js"
+				"src/pageRewrite.js",
+				"src/jquery.js",
+				"src/reader-frame.html",
+				"src/reader-frame.js",
+				"src/sandbox.html",
+				"src/sandbox.js"
 			],
 			"matches": [
 				"<all_urls>"

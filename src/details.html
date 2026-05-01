@@ -62,28 +62,6 @@
         <div class="form-description">Default selector (in OR): ["[id*=comment]", "[class*=meta]", "ul", ...]</div>
       </div>
 
-      <div class="form-group">
-        <div class="toggle-group">
-          <label class="toggle">
-            <input type="checkbox" id="reader-dir">
-            <span class="slider"></span>
-          </label>
-          <span class="toggle-label">横向阅读</span>
-        </div>
-        <div class="form-description">选择翻页方向（横向/纵向）</div>
-      </div>
-
-      <div class="form-group">
-        <div class="toggle-group">
-          <label class="toggle">
-            <input type="checkbox" id="two-column">
-            <span class="slider"></span>
-          </label>
-          <span class="toggle-label">左右分页</span>
-        </div>
-        <div class="form-description">以双栏模式展示阅读内容</div>
-      </div>
-
       <div class="btn-row">
         <button class="btn btn-primary save">保存配置</button>
         <button class="btn btn-ghost reset">重置为默认</button>
@@ -127,6 +105,28 @@
         <label class="form-label">页面宽度 <span class="range-value" id="contentwidth-val">960px</span></label>
         <input class="form-range" type="range" id="contentwidth" min="600" max="1400" step="10" value="960">
         <div class="form-description">内容区域最大宽度（600px - 1400px）。左右分页模式下会自动加倍。</div>
+      </div>
+
+      <div class="form-group">
+        <div class="toggle-group">
+          <label class="toggle">
+            <input type="checkbox" id="reader-dir">
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label">横向阅读</span>
+        </div>
+        <div class="form-description">选择翻页方向（横向/纵向）</div>
+      </div>
+
+      <div class="form-group">
+        <div class="toggle-group">
+          <label class="toggle">
+            <input type="checkbox" id="two-column">
+            <span class="slider"></span>
+          </label>
+          <span class="toggle-label">左右分页</span>
+        </div>
+        <div class="form-description">以双栏模式展示阅读内容</div>
       </div>
 
       <div class="btn-row">
@@ -194,7 +194,7 @@
     <div class="section-body hidetgt jsdetails">
       <div class="form-group">
         <label class="form-label" for="jsinput">自定义脚本 (JavaScript)</label>
-        <textarea class="form-input css" id="jsinput" placeholder="当有内容时，会在解析页面时执行此代码。"></textarea>
+        <textarea class="form-input css" id="jsinput" style="height:700px;" placeholder="当有内容时，会在解析页面时执行此代码。"></textarea>
         <div class="form-description">注意：不建议普通用户修改此项。处理的页面内容存放在 loadedContent 全局数组中。</div>
       </div>
       <div class="btn-row">
