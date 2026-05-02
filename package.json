@@ -6,9 +6,11 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build:app && npm run package:zip",
+    "build:app": "vite build",
+    "package:zip": "cd dist && bestzip ../rabbook-lean.zip *",
     "preview": "vite preview",
-    "zip": "npm run build && cd dist && bestzip ../rabbook-lean.zip *"
+    "zip": "npm run build"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.6",
