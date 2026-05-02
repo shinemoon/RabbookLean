@@ -548,7 +548,7 @@ function displayPage() {
         } else if (fontfamilySelectValue === READER_FONT_CUSTOM_VALUE) {
             fontfamilyInput = READER_FONT_DEFAULT_VALUE;
         }
-        var sdir = !!$('#reader-dir').prop('checked');
+        var sdir = false; // 横向翻页已禁用，固定为纵向
         var stwocolumn = !!$('#two-column').prop('checked');
 
         if (!Number.isFinite(fontsize) || !Number.isFinite(linespacing) || !Number.isFinite(contentwidth)) {
