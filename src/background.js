@@ -5,7 +5,7 @@ var cntport = null;
 var detport = null;
 var config = null;
 
-var DEFAULT_CONFIG = { 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight": false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960 };
+var DEFAULT_CONFIG = { 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight": false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960, "fontfamily": '__embedded__' };
 
 // Allowd url , only from bookmark page!
 var allowedurl = null;
@@ -71,6 +71,14 @@ chrome.runtime.onConnect.addListener(function (port) {
 
 // 初始化配置读取
 initConfigAndListener();
+
+chrome.storage.onChanged.addListener(function (changes, areaName) {
+    if (areaName !== 'local') {
+        return;
+    }
+    // 配置变更后同步更新 SW 内存缓存，避免下一次注入读取旧值。
+    getLatestConfig(function () {});
+});
 
 function handlePort(port) {
     // Initialize the connection action:
@@ -150,7 +158,7 @@ function handlePort(port) {
     // Actions for 'Content Script Page Port'
     if (port.name == 'contpage') {
         cntport = port;
-        cntport.postMessage({ "type": "cfg", "clist": config.clist, "flist": config.flist, "plist": config.plist, "nlist": config.nlist, "dir": config.dir, "twocolumn": config.twocolumn, "tlist": config.tlist, "css": config.css, "js": config.js,"innight":config.innight, "fontsize": config.fontsize, "linespacing": config.linespacing, "contentwidth": config.contentwidth });
+        cntport.postMessage({ "type": "cfg", "clist": config.clist, "flist": config.flist, "plist": config.plist, "nlist": config.nlist, "dir": config.dir, "twocolumn": config.twocolumn, "tlist": config.tlist, "css": config.css, "js": config.js,"innight":config.innight, "fontsize": config.fontsize, "linespacing": config.linespacing, "contentwidth": config.contentwidth, "fontfamily": config.fontfamily });
         // 发送完配置后，理论上就Go了
         // TODO: Progress passing
         cntport.postMessage({ "type": "go", "progress": null });

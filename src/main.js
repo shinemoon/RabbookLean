@@ -58,11 +58,141 @@ function isValidPageForInjection() {
 
 // 将排版配置作为 CSS 自定义属性应用到根元素
 // 这样 main.css 中的 var(--reader-font-size) 等变量就能生效
-function applyReaderConfig(fontsize, linespacing, contentwidth) {
+function normalizeFontFamily(fontfamily) {
+    if (typeof fontfamily !== 'string') {
+        return '';
+    }
+    var cleaned = fontfamily.replace(/[\n\r;{}]/g, '').trim();
+    if (!cleaned || cleaned.length > 160) {
+        return '';
+    }
+    var segments = cleaned.split(',').map(function (s) {
+        return s.replace(/["']/g, '').trim();
+    }).filter(function (s) {
+        return !!s;
+    });
+    if (segments.length === 0) {
+        return '';
+    }
+
+    var safeSegments = [];
+    var genericFamilies = {
+        'serif': true,
+        'sans-serif': true,
+        'monospace': true,
+        'cursive': true,
+        'fantasy': true,
+        'system-ui': true,
+        'ui-serif': true,
+        'ui-sans-serif': true,
+        'ui-monospace': true,
+        'ui-rounded': true,
+    };
+
+    for (var i = 0; i < segments.length; i++) {
+        var seg = segments[i].replace(/[^\w\u4e00-\u9fa5\s\-]/g, '').trim();
+        if (!seg) {
+            continue;
+        }
+        if (genericFamilies[seg]) {
+            safeSegments.push(seg);
+        } else {
+            safeSegments.push('"' + seg + '"');
+        }
+    }
+    return safeSegments.join(', ');
+}
+
+function isEmbeddedFontSelection(fontfamily) {
+    if (typeof fontfamily !== 'string') {
+        return true;
+    }
+    var trimmed = fontfamily.trim();
+    return trimmed === '' || trimmed === '__embedded__';
+}
+
+function applyReaderConfig(fontsize, linespacing, contentwidth, fontfamily) {
     var root = document.documentElement;
     root.style.setProperty('--reader-font-size', (fontsize || 16) + 'px');
     root.style.setProperty('--reader-line-height', linespacing || 1.6);
     root.style.setProperty('--reader-content-width', (contentwidth || 960) + 'px');
+
+    if (isEmbeddedFontSelection(fontfamily)) {
+        root.style.setProperty('--reader-font-family', 'var(--font-reader-embedded)');
+        return;
+    }
+
+    var normalizedFontFamily = normalizeFontFamily(fontfamily);
+    if (normalizedFontFamily) {
+        root.style.setProperty('--reader-font-family', normalizedFontFamily + ', var(--font-serif)');
+    } else {
+        root.style.setProperty('--reader-font-family', 'var(--font-reader-embedded)');
+    }
+}
+
+function applyReaderConfigFromStorageOrFallback(fallbackMsg) {
+    var defaults = {
+        fontsize: 16,
+        linespacing: 1.6,
+        contentwidth: 960,
+        fontfamily: '__embedded__',
+        dir: false,
+        twocolumn: true,
+    };
+
+    chrome.storage.local.get(defaults, function (stored) {
+        var fs = Number(stored.fontsize);
+        var lh = Number(stored.linespacing);
+        var cw = Number(stored.contentwidth);
+        var ff = typeof stored.fontfamily === 'string' ? stored.fontfamily : defaults.fontfamily;
+        var dir = typeof stored.dir === 'boolean' ? stored.dir : defaults.dir;
+        var twocol = typeof stored.twocolumn === 'boolean' ? stored.twocolumn : defaults.twocolumn;
+
+        if (!Number.isFinite(fs) || fs <= 0) {
+            fs = Number(fallbackMsg && fallbackMsg.fontsize);
+            if (!Number.isFinite(fs) || fs <= 0) {
+                fs = defaults.fontsize;
+            }
+        }
+        if (!Number.isFinite(lh) || lh <= 0) {
+            lh = Number(fallbackMsg && fallbackMsg.linespacing);
+            if (!Number.isFinite(lh) || lh <= 0) {
+                lh = defaults.linespacing;
+            }
+        }
+        if (!Number.isFinite(cw) || cw <= 0) {
+            cw = Number(fallbackMsg && fallbackMsg.contentwidth);
+            if (!Number.isFinite(cw) || cw <= 0) {
+                cw = defaults.contentwidth;
+            }
+        }
+        if (!ff || !ff.trim()) {
+            ff = (fallbackMsg && typeof fallbackMsg.fontfamily === 'string' && fallbackMsg.fontfamily.trim())
+                ? fallbackMsg.fontfamily
+                : defaults.fontfamily;
+        }
+        if (typeof dir !== 'boolean') {
+            dir = fallbackMsg && typeof fallbackMsg.dir === 'boolean' ? fallbackMsg.dir : defaults.dir;
+        }
+        if (typeof twocol !== 'boolean') {
+            twocol = fallbackMsg && typeof fallbackMsg.twocolumn === 'boolean' ? fallbackMsg.twocolumn : defaults.twocolumn;
+        }
+
+        rfontsize = fs;
+        rlinespacing = lh;
+        rcontentwidth = cw;
+        rfontfamily = ff;
+        rdir = dir;
+        rtwocolumn = twocol;
+        applyReaderConfig(rfontsize, rlinespacing, rcontentwidth, rfontfamily);
+
+        readerLayoutConfigReady = true;
+        if (pendingGoProgress !== null) {
+            var startProgress = pendingGoProgress;
+            pendingGoProgress = null;
+            handlePage(startProgress);
+        }
+    });
 }
 
 // 建立与 Service Worker 的连接
@@ -100,6 +230,7 @@ function connectToBackground() {
     port.onMessage.addListener(function (msg) {
         console.debug("Received message from background:", msg);
         if (msg.type == 'cfg') {
+            readerLayoutConfigReady = false;
             rflist = msg.flist;
             rclist = msg.clist;
             rtlist = msg.tlist;
@@ -109,19 +240,17 @@ function connectToBackground() {
             rtwocolumn = msg.twocolumn;
             rjs = msg.js;
             inNight = msg.innight;
-            rfontsize = msg.fontsize || 16;
-            rlinespacing = msg.linespacing || 1.6;
-            rcontentwidth = msg.contentwidth || 960;
-            // 将配置值应用到 CSS 自定义属性，使 main.css 中的 var() 引用生效
-            applyReaderConfig(rfontsize, rlinespacing, rcontentwidth);
+            // 字体和排版优先读取 storage 最新值，避免端口消息缓存导致字体不切换。
+            applyReaderConfigFromStorageOrFallback(msg);
         };
         if (msg.type == "go") {
-            if (msg.progress != null) {
-                progress = msg.progress;
-                handlePage(progress);
-            } else {
-                handlePage(0);
+            var startProgress = msg.progress != null ? msg.progress : 0;
+            if (!readerLayoutConfigReady) {
+                pendingGoProgress = startProgress;
+                return;
             }
+            progress = startProgress;
+            handlePage(progress);
         };
     });
     // 监听断开连接事件
@@ -145,8 +274,11 @@ var rtlist = [];
 var rplist = [];
 var rnlist = [];
 var rdir = true;
-var twocolumn = false;
+var rtwocolumn = false;
 var rjs = null;
+var rfontfamily = '';
+var readerLayoutConfigReady = false;
+var pendingGoProgress = null;
 var lastY = 0;
 var sumDelta = 0;
 var scrollCnt = 0;

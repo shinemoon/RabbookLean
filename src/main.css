@@ -1,5 +1,14 @@
 @charset "UTF-8";
 @import './design-tokens.css';
+
+@font-face {
+  font-family: 'RabbookEmbedded';
+  src: url('./font/font.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ============================================
    RabbookLean Reader — Modern Reading Interface
    ============================================ */
@@ -21,7 +30,7 @@ body {
 /* ---- Content area ---- */
 #gnContent {
   width: 100%;
-  font-family: var(--font-serif) !important;
+  font-family: var(--reader-font-family, var(--font-serif)) !important;
   font-size: var(--reader-font-size, 1rem);
   color: var(--color-text);
   margin-left: auto;

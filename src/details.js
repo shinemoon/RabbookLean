@@ -21,7 +21,136 @@ var scrollCnt = 0;
 
 var bklist = [];
 var css = null;
+var fontfamily = '';
+var detectedSystemFontMap = {};
 var confirmResolver = null;
+var READER_FONT_DEFAULT_VALUE = '__embedded__';
+var READER_FONT_CUSTOM_VALUE = '__custom__';
+
+var FONT_CANDIDATES = [
+    { label: '默认（内嵌字体）', value: READER_FONT_DEFAULT_VALUE },
+    { label: '自定义输入', value: READER_FONT_CUSTOM_VALUE },
+    { label: '微软雅黑 (Microsoft YaHei)', value: 'Microsoft YaHei, 微软雅黑', probes: ['Microsoft YaHei', '微软雅黑'] },
+    { label: '宋体 (SimSun)', value: 'SimSun, 宋体', probes: ['SimSun', '宋体'] },
+    { label: '黑体 (SimHei)', value: 'SimHei, 黑体', probes: ['SimHei', '黑体'] },
+    { label: '楷体 (KaiTi)', value: 'KaiTi, 楷体', probes: ['KaiTi', '楷体'] },
+    { label: '仿宋 (FangSong)', value: 'FangSong, 仿宋', probes: ['FangSong', '仿宋'] },
+    { label: '等线 (DengXian)', value: 'DengXian, 等线', probes: ['DengXian', '等线'] },
+    { label: '苹方 (PingFang SC)', value: 'PingFang SC, 苹方', probes: ['PingFang SC', '苹方'] },
+    { label: '华文宋体 (STSong)', value: 'STSong, 华文宋体', probes: ['STSong', '华文宋体'] },
+    { label: '华文仿宋 (STFangsong)', value: 'STFangsong, 华文仿宋', probes: ['STFangsong', '华文仿宋'] },
+    { label: '华文楷体 (STKaiti)', value: 'STKaiti, 华文楷体', probes: ['STKaiti', '华文楷体'] },
+    { label: '思源黑体 (Source Han Sans SC)', value: 'Source Han Sans SC, Noto Sans CJK SC', probes: ['Source Han Sans SC', 'Noto Sans CJK SC'] },
+    { label: '思源宋体 (Source Han Serif SC)', value: 'Source Han Serif SC, Noto Serif CJK SC', probes: ['Source Han Serif SC', 'Noto Serif CJK SC'] },
+    { label: '文泉驿微米黑', value: 'WenQuanYi Micro Hei', probes: ['WenQuanYi Micro Hei'] },
+    { label: 'Segoe UI', value: 'Segoe UI', probes: ['Segoe UI'] },
+    { label: 'Arial', value: 'Arial', probes: ['Arial'] },
+    { label: 'Helvetica Neue', value: 'Helvetica Neue, Helvetica', probes: ['Helvetica Neue', 'Helvetica'] },
+    { label: 'Verdana', value: 'Verdana', probes: ['Verdana'] },
+    { label: 'Tahoma', value: 'Tahoma', probes: ['Tahoma'] },
+    { label: 'Georgia', value: 'Georgia', probes: ['Georgia'] },
+    { label: 'Times New Roman', value: 'Times New Roman', probes: ['Times New Roman'] },
+    { label: 'Cambria', value: 'Cambria', probes: ['Cambria'] },
+    { label: 'Garamond', value: 'Garamond', probes: ['Garamond'] },
+    { label: 'Palatino', value: 'Palatino', probes: ['Palatino'] },
+    { label: 'Baskerville', value: 'Baskerville', probes: ['Baskerville'] }
+];
+
+function isSystemFontAvailable(fontName) {
+    var baseFonts = ['monospace', 'sans-serif', 'serif'];
+    var testStrings = ['mmmmmmmmmwwwwwiiiiii@@##', '汉字测试閱讀排版字体'];
+    var testSize = '72px';
+    var canvas = document.createElement('canvas');
+    var context = canvas.getContext('2d');
+    if (!context) {
+        return false;
+    }
+
+    var baseline = {};
+    for (var i = 0; i < baseFonts.length; i++) {
+        baseline[baseFonts[i]] = [];
+        for (var t = 0; t < testStrings.length; t++) {
+            context.font = testSize + ' ' + baseFonts[i];
+            baseline[baseFonts[i]].push(context.measureText(testStrings[t]).width);
+        }
+    }
+
+    for (var j = 0; j < baseFonts.length; j++) {
+        var base = baseFonts[j];
+        for (var k = 0; k < testStrings.length; k++) {
+            context.font = testSize + ' "' + fontName + '",' + base;
+            var width = context.measureText(testStrings[k]).width;
+            if (Math.abs(width - baseline[base][k]) > 0.1) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function detectSystemFonts() {
+    var map = {};
+    for (var i = 0; i < FONT_CANDIDATES.length; i++) {
+        var candidate = FONT_CANDIDATES[i];
+        if (candidate.value === READER_FONT_DEFAULT_VALUE) {
+            map[candidate.value] = true;
+            continue;
+        }
+        if (candidate.value === READER_FONT_CUSTOM_VALUE) {
+            map[candidate.value] = true;
+            continue;
+        }
+        var probes = candidate.probes || [candidate.value.split(',')[0].trim()];
+        var available = false;
+        for (var p = 0; p < probes.length; p++) {
+            if (isSystemFontAvailable(probes[p])) {
+                available = true;
+                break;
+            }
+        }
+        map[candidate.value] = available;
+    }
+    return map;
+}
+
+function renderFontFamilyOptions(selectedFontFamily) {
+    var $select = $('#fontfamily');
+    if ($select.length === 0) {
+        return;
+    }
+
+    var list = FONT_CANDIDATES.slice().sort(function (a, b) {
+        var ad = detectedSystemFontMap[a.value] ? 1 : 0;
+        var bd = detectedSystemFontMap[b.value] ? 1 : 0;
+        return bd - ad;
+    });
+
+    var isPreset = list.some(function (it) { return it.value === selectedFontFamily; });
+    var isCustomValue = !!selectedFontFamily && !isPreset;
+    if (isCustomValue) {
+        list.unshift({ label: '自定义: ' + selectedFontFamily, value: READER_FONT_CUSTOM_VALUE, probes: [selectedFontFamily] });
+    }
+
+    var options = [];
+    for (var i = 0; i < list.length; i++) {
+        var item = list[i];
+        var available = !!detectedSystemFontMap[item.value];
+        var isSpecial = item.value === READER_FONT_DEFAULT_VALUE || item.value === READER_FONT_CUSTOM_VALUE;
+        var suffix = (!isSpecial && item.value && !available) ? '（未检测到）' : '';
+        var escapedValue = (item.value || '').replace(/"/g, '&quot;');
+        var escapedLabel = (item.label || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        options.push('<option value="' + escapedValue + '">' + escapedLabel + suffix + '</option>');
+    }
+    $select.html(options.join(''));
+
+    if (isCustomValue) {
+        $select.val(READER_FONT_CUSTOM_VALUE);
+        $('#fontfamily-custom').val(selectedFontFamily);
+    } else {
+        $select.val(selectedFontFamily || READER_FONT_DEFAULT_VALUE);
+        $('#fontfamily-custom').val('');
+    }
+}
 
 function ensureFeedbackUi() {
     if ($('#ui-toast-host').length === 0) {
@@ -163,6 +292,7 @@ function connectToBackground() {
 connectToBackground();
 
 $(document).ready(function () {
+    detectedSystemFontMap = detectSystemFonts();
     refreshDetailsPage();
     // Version Update
     // Get the manifest object
@@ -177,7 +307,7 @@ function refreshDetailsPage() {
     chrome.storage.local.get({
         'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [],
         'dir': false, 'css': null, 'js': null, 'bookmarks': [], 'twocolumn': true,
-        'fontsize': 16, 'linespacing': 1.6, 'contentwidth': 960
+        'fontsize': 16, 'linespacing': 1.6, 'contentwidth': 960, 'fontfamily': READER_FONT_DEFAULT_VALUE
     }, function (result) {
         clist = result.clist;
         tlist = result.tlist;
@@ -189,6 +319,7 @@ function refreshDetailsPage() {
         dir = result.dir;
         twocolumn = result.twocolumn;
         bklist = result.bookmarks;
+        fontfamily = result.fontfamily || READER_FONT_DEFAULT_VALUE;
         $('#text-selector').val(JSON.stringify(clist));
         $('#text-filter').val(JSON.stringify(flist));
         $('#reader-dir').prop("checked", dir);
@@ -205,6 +336,7 @@ function refreshDetailsPage() {
         $('#linespacing-val').text(result.linespacing.toFixed(1));
         $('#contentwidth').val(result.contentwidth);
         $('#contentwidth-val').text(result.contentwidth + 'px');
+        renderFontFamilyOptions(fontfamily);
         // Load show
         displayPage();
     });
@@ -408,6 +540,14 @@ function displayPage() {
         var fontsize = parseInt($('#fontsize').val());
         var linespacing = parseFloat($('#linespacing').val());
         var contentwidth = parseInt($('#contentwidth').val());
+        var fontfamilySelectValue = ($('#fontfamily').val() || READER_FONT_DEFAULT_VALUE).trim();
+        var fontfamilyCustomValue = ($('#fontfamily-custom').val() || '').trim();
+        var fontfamilyInput = fontfamilySelectValue;
+        if (fontfamilyCustomValue) {
+            fontfamilyInput = fontfamilyCustomValue;
+        } else if (fontfamilySelectValue === READER_FONT_CUSTOM_VALUE) {
+            fontfamilyInput = READER_FONT_DEFAULT_VALUE;
+        }
         var sdir = !!$('#reader-dir').prop('checked');
         var stwocolumn = !!$('#two-column').prop('checked');
 
@@ -418,10 +558,12 @@ function displayPage() {
 
         dir = sdir;
         twocolumn = stwocolumn;
+        fontfamily = fontfamilyInput || READER_FONT_DEFAULT_VALUE;
         chrome.storage.local.set({
             "fontsize": fontsize,
             "linespacing": linespacing,
             "contentwidth": contentwidth,
+            "fontfamily": fontfamily,
             "dir": dir,
             "twocolumn": twocolumn
         }, function () {
@@ -435,14 +577,23 @@ function displayPage() {
         }
         dir = false;
         twocolumn = true;
+        fontfamily = READER_FONT_DEFAULT_VALUE;
         $('#reader-dir').prop('checked', dir);
         $('#two-column').prop('checked', twocolumn);
-        chrome.storage.local.set({ "fontsize": 16, "linespacing": 1.6, "contentwidth": 960, "dir": dir, "twocolumn": twocolumn }, function () {
+        $('#fontfamily').val(READER_FONT_DEFAULT_VALUE);
+        $('#fontfamily-custom').val('');
+        chrome.storage.local.set({ "fontsize": 16, "linespacing": 1.6, "contentwidth": 960, "fontfamily": fontfamily, "dir": dir, "twocolumn": twocolumn }, function () {
             showToast("排版已重置为默认值");
             setTimeout(function () {
                 window.location.reload();
             }, 280);
         });
+    });
+
+    $('#fontfamily').off('change').on('change', function () {
+        if ($(this).val() !== READER_FONT_CUSTOM_VALUE) {
+            $('#fontfamily-custom').val('');
+        }
     });
 
     // Live value display for range sliders

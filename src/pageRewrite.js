@@ -134,26 +134,6 @@ function rewritePage(url, startp) {
     }
     //    $('body').attr('style','');
     $('body').attr('style', '');
-    var fontpath = chrome.runtime.getURL('src/font');
-    var fontstr = "@font-face {font-family: 'Kesong';src: url('" + fontpath + "/font.ttf') format('truetype');}";
-    $('body').append('<style>' + fontstr + '</style>');
-
-    fontpath = fontpath + "/fonts"; // 定义字体文件路径
-    fontstr = `
-@font-face {
-    font-family: 'icomoon';
-    src: url('${fontpath}/icomoon.eot?cmcz0s');
-    src: url('${fontpath}/icomoon.eot?cmcz0s#iefix') format('embedded-opentype'),
-         url('${fontpath}/icomoon.ttf?cmcz0s') format('truetype'),
-         url('${fontpath}/icomoon.woff?cmcz0s') format('woff'),
-         url('${fontpath}/icomoon.svg?cmcz0s#icomoon') format('svg');
-    font-weight: normal;
-    font-style: normal;
-    font-display: block;
-}`;
-
-
-    $('body').append('<style>' + fontstr + '</style>');
 
     //Title
     $('body').append('<div id="lrbk_title"></div>');

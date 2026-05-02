@@ -34,6 +34,8 @@
   --font-serif: Baskerville, Georgia, 'Liberation Serif', 'Kaiti SC', STKaiti, KaiTi, serif;
   --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
   --font-title: 'Kesong', Baskerville, Georgia, 'Kaiti SC', STKaiti, KaiTi, serif;
+  --font-reader-embedded: 'RabbookEmbedded', var(--font-serif);
+  --reader-font-family: var(--font-reader-embedded);
 
   /* ---- 字号 ---- */
   --text-xs: 0.75rem;
