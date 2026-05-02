@@ -352,4 +352,106 @@ body.rb-night-invert #pdown {
 #pdown:hover {
   border-right-color: var(--color-primary-light);
   background: linear-gradient(-90deg, rgba(79, 110, 247, 0.03) 0%, transparent 100%);
-}/*# sourceMappingURL=main.css.map */
+}
+
+/* ---- Go-to-page dialog ---- */
+#rbGotoDialog {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.rb-goto-box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  min-width: 280px;
+  max-width: 360px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: rbGotoIn 0.15s ease;
+}
+@keyframes rbGotoIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.rb-goto-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: center;
+}
+.rb-goto-hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  text-align: center;
+  margin-top: calc(-1 * var(--space-2));
+}
+.rb-goto-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-lg);
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  text-align: center;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  -moz-appearance: textfield;
+}
+.rb-goto-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.12);
+}
+.rb-goto-input::-webkit-inner-spin-button,
+.rb-goto-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+.rb-goto-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+.rb-goto-cancel,
+.rb-goto-confirm {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  transition: all var(--transition-fast);
+}
+.rb-goto-cancel {
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+.rb-goto-cancel:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+.rb-goto-confirm {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+.rb-goto-confirm:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+/*# sourceMappingURL=main.css.map */

@@ -19,6 +19,50 @@ function lastpage() {
     return $("#currentindex").text() == $("#totalindex").text();
 }
 
+function showGotoPageDialog(pages, onConfirm) {
+    var existing = document.getElementById('rbGotoDialog');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'rbGotoDialog';
+    overlay.innerHTML =
+        '<div class="rb-goto-box">' +
+        '  <div class="rb-goto-title">跳转到页码</div>' +
+        '  <div class="rb-goto-hint">共 ' + pages + ' 页</div>' +
+        '  <input class="rb-goto-input" type="number" min="1" max="' + pages + '" placeholder="输入页码" />' +
+        '  <div class="rb-goto-actions">' +
+        '    <button class="rb-goto-cancel">取消</button>' +
+        '    <button class="rb-goto-confirm">跳转</button>' +
+        '  </div>' +
+        '</div>';
+    document.body.appendChild(overlay);
+
+    var input = overlay.querySelector('.rb-goto-input');
+    var confirmBtn = overlay.querySelector('.rb-goto-confirm');
+    var cancelBtn = overlay.querySelector('.rb-goto-cancel');
+
+    function closeDialog() { overlay.remove(); }
+    function doConfirm() {
+        var val = parseInt(input.value, 10);
+        closeDialog();
+        onConfirm(val);
+    }
+
+    input.addEventListener('keydown', function(e) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (e.key === 'Enter') doConfirm();
+        else if (e.key === 'Escape') closeDialog();
+    });
+    confirmBtn.addEventListener('click', doConfirm);
+    cancelBtn.addEventListener('click', closeDialog);
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) closeDialog();
+    });
+
+    setTimeout(function() { input.focus(); }, 30);
+}
+
 function createReaderEngine($container, options) {
     options = options || {};
     var $floors = $container.find('.bb-item');
@@ -203,54 +247,71 @@ function rewritePage(url, startp) {
         }
     });
 
-    // 清除全局绑定的键盘事件监听器
-    const eventTypes = ["keydown", "keypress", "keyup"];
-    const allowedKeys = new Set(["j", "k", "q", "l", "h", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Space", " "]); // 允许的按键
-
-    // 阻止所有按键事件的回调仅允许特定：
+    // 仅在 keydown 监听快捷键，并优先按 event.code 识别，避免输入法/大小写影响。
+    const eventTypes = ["keydown"];
     const preventEvent = (event) => {
-        if (allowedKeys.has(event.key) && event.type === "keydown") {
-            console.info("Allow:" + event.type);
-            bindScrollAction();
-            // Next Page
-            if (event.key === "j" || event.key === "Space" || event.key === " " || event.key === "ArrowRight" || event.key === "PageDown") {
-                if (lastpage())
-                    detectBottom();
-                else
-                    readerEngineInstance.next();
-            } else if (event.key === "k" || event.key === "ArrowLeft" || event.key === "PageUp") {
-                readerEngineInstance.prev();
-            } else if (event.key === "l" || event.key === "ArrowDown") {
-                rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
-                $('.fetchnext').click();
-            } else if (event.key === "h" || event.key === "ArrowUp") {
-                rTitle = document.getElementById('ppage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
-                $('.fetchprev').click();
-            } else if (event.key === "q") {
-                // Go to floor
-                var tofloor = prompt("请输入跳转页数", "");
-                if (tofloor < 1 || tofloor > pages) {
-                    if (tofloor < 1) {
-                        readerEngineInstance.scrollToFloor(0);
-                    }
-                    if (tofloor > pages) {
-                        readerEngineInstance.scrollToFloor(pages - 1);
-                    }
-                } else {
-                    readerEngineInstance.scrollToFloor(parseInt(tofloor) - 1);
-                }
-            }
+        // 若焦点在自定义弹窗输入框内，跳过快捷键处理
+        if (event.target && event.target.tagName === 'INPUT') return;
+
+        var code = event.code || '';
+        var key = (event.key || '').toLowerCase();
+
+        var action = '';
+        // 固化基础快捷键：j 下一页，k 上一页
+        if (code === 'KeyJ' || key === 'j') {
+            action = 'prevPage';
+        } else if (code === 'KeyK' || key === 'k') {
+            action = 'nextPage';
+        } else if (code === 'ArrowRight' || key === 'arrowright' || code === 'PageDown' || key === 'pagedown' || code === 'Space' || key === ' ') {
+            action = 'nextPage';
+        } else if (code === 'ArrowLeft' || key === 'arrowleft' || code === 'PageUp' || key === 'pageup') {
+            action = 'prevPage';
+        } else if (code === 'KeyL' || key === 'l' || code === 'ArrowDown' || key === 'arrowdown') {
+            action = 'nextChapter';
+        } else if (code === 'KeyH' || key === 'h' || code === 'ArrowUp' || key === 'arrowup') {
+            action = 'prevChapter';
+        } else if (code === 'KeyQ' || key === 'q') {
+            action = 'gotoPage';
         }
-        event.stopPropagation(); // 阻止事件冒泡
-        event.preventDefault(); // 阻止默认行为（如键盘快捷键）
-        event.stopImmediatePropagation(); // 阻止后续事件触发
+
+        if (!action) {
+            return;
+        }
+
+        bindScrollAction();
+        if (action === 'nextPage') {
+            if (lastpage())
+                detectBottom();
+            else
+                readerEngineInstance.next();
+        } else if (action === 'prevPage') {
+            readerEngineInstance.prev();
+        } else if (action === 'nextChapter') {
+            rTitle = document.getElementById('npage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
+            $('.fetchnext').click();
+        } else if (action === 'prevChapter') {
+            rTitle = document.getElementById('ppage').contentWindow.document.head.getElementsByTagName("title")[0].innerHTML;
+            $('.fetchprev').click();
+        } else if (action === 'gotoPage') {
+            showGotoPageDialog(pages, function(tofloor) {
+                if (!tofloor || isNaN(tofloor)) return;
+                if (tofloor < 1) {
+                    readerEngineInstance.scrollToFloor(0);
+                } else if (tofloor > pages) {
+                    readerEngineInstance.scrollToFloor(pages - 1);
+                } else {
+                    readerEngineInstance.scrollToFloor(tofloor - 1);
+                }
+            });
+        }
+
+        event.stopPropagation();
+        event.preventDefault();
+        event.stopImmediatePropagation();
     };
 
-    // 为所有按键事件添加覆盖处理
     eventTypes.forEach(type => {
-        // 移除之前添加的监听器（如果有）
         window.removeEventListener(type, preventEvent, true);
-        // 捕获阶段阻止事件
         window.addEventListener(type, preventEvent, true);
     });
 
