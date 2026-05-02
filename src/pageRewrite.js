@@ -224,22 +224,72 @@ function rewritePage(url, startp) {
     // 这里不再在页面上下文执行用户脚本，避免触发页面 CSP。
 
     // === 增强清理：清除原始页面的残留 ===
-    // 清除所有定时器
+
+    // 1. 封堵 window 级弹窗/跳转 API（原脚本已注册的 window 级监听器即使 body 清空也会继续调用这些 API）
+    window.open = function() { return null; };
+    window.alert = function() {};
+    window.confirm = function() { return false; };
+    window.prompt = function() { return null; };
+    // 封堵 beforeunload 弹窗（切章节时不应弹确认框）
+    window.onbeforeunload = null;
+    window.onunload = null;
+    window.addEventListener('beforeunload', function(e) { e.stopImmediatePropagation(); e.preventDefault(); delete e['returnValue']; }, true);
+
+    // 2. 封堵右键菜单（捕获阶段，优先级高于原页面任何 contextmenu 监听）
+    window.addEventListener('contextmenu', function(e) { e.stopImmediatePropagation(); e.preventDefault(); }, true);
+
+    // 3. 清除所有定时器（setTimeout / setInterval）
     var highestTimerId = window.setTimeout(function(){}, 0);
     for (var i = 0; i <= highestTimerId; i++) {
         window.clearTimeout(i);
         window.clearInterval(i);
     }
-    // 移除 head 中残留的 link/style/script 标签（保留扩展自身注入的）
+
+    // 4. 劫持 requestAnimationFrame，让原页面残留的 rAF 回调空转
+    (function() {
+        var _raf = window.requestAnimationFrame.bind(window);
+        var _caf = window.cancelAnimationFrame.bind(window);
+        var rbRafGuardActive = true;
+        window.requestAnimationFrame = function(cb) {
+            if (!rbRafGuardActive) return _raf(cb);
+            // 立即注册但包一层空保护：rAF 仍能正常调度，但只允许扩展自身使用
+            return _raf(function(ts) {
+                // 延迟解锁后原脚本的 rAF 才可能漏进来，此处直接丢弃
+            });
+        };
+        // 解锁：页面重建完成后恢复正常 rAF（给扩展自身动画使用）
+        setTimeout(function() {
+            window.requestAnimationFrame = _raf;
+            window.cancelAnimationFrame = _caf;
+        }, 400);
+    })();
+
+    // 5. MutationObserver 守卫：监听 DOM，立即移除任何新插入的 <script> / <iframe> 节点
+    if (window._rbScriptGuard) { window._rbScriptGuard.disconnect(); }
+    window._rbScriptGuard = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            m.addedNodes.forEach(function(node) {
+                if (!node.tagName) return;
+                var tag = node.tagName.toUpperCase();
+                if (tag === 'SCRIPT') { node.parentNode && node.parentNode.removeChild(node); }
+                if (tag === 'IFRAME' && node.id !== 'ppage' && node.id !== 'npage' && node.id !== 'sandbox') {
+                    node.parentNode && node.parentNode.removeChild(node);
+                }
+            });
+        });
+    });
+    window._rbScriptGuard.observe(document.documentElement, { childList: true, subtree: true });
+
+    // 6. 移除 head 中残留的 link/style/script 标签（保留扩展自身注入的）
     $('head').find('link, style, script').not('[src*="main.css"], [src*="main.js"], [src*="pageRewrite"]').remove();
     // 移除 body 中可能残留的 link/script/style/iframe（排除 ppage/npage）
     $('body').find('link, script, style, noscript, iframe:not(#ppage, #npage)').remove();
     // 重新确保 ppage/npage iframe 隐藏（上述清理可能间接影响其 display:none）
     $('#ppage').css('display', 'none');
     $('#npage').css('display', 'none');
-    // 清除所有内联事件属性，防止残留 JS 干扰
+    // 7. 清除所有内联事件属性，防止残留 JS 干扰
     // jQuery removeAttr() 一次只接受一个属性名，需逐个清理
-    var inlineAttrs = ['onclick','onmouseover','onmouseout','onkeydown','onkeyup','onsubmit','onchange','onfocus','onblur','onload','onerror','onmousedown','onmouseup','ondblclick','oncontextmenu','onwheel','ontouchstart','ontouchend','ontouchmove','onpointerdown','onpointermove','onpointerup'];
+    var inlineAttrs = ['onclick','onmouseover','onmouseout','onkeydown','onkeyup','onsubmit','onchange','onfocus','onblur','onload','onerror','onmousedown','onmouseup','ondblclick','oncontextmenu','onwheel','ontouchstart','ontouchend','ontouchmove','onpointerdown','onpointermove','onpointerup','ondragstart','onselect','oncopy','onpaste','oncut','onselectstart'];
     $('body').find('*').each(function() {
         var $el = $(this);
         for (var a = 0; a < inlineAttrs.length; a++) {
