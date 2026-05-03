@@ -26,6 +26,7 @@ var detectedSystemFontMap = {};
 var confirmResolver = null;
 var READER_FONT_DEFAULT_VALUE = '__embedded__';
 var READER_FONT_CUSTOM_VALUE = '__custom__';
+var globalWheelBound = false;
 
 var FONT_CANDIDATES = [
     { label: '默认（内嵌字体）', value: READER_FONT_DEFAULT_VALUE },
@@ -233,6 +234,39 @@ function showConfirmDialog(message, title = '请确认') {
     });
 }
 
+function normalizeWheelDelta(event) {
+    var deltaY = event.deltaY || 0;
+    // 0: pixels, 1: lines, 2: pages
+    if (event.deltaMode === 1) {
+        return deltaY * 16;
+    }
+    if (event.deltaMode === 2) {
+        return deltaY * window.innerHeight;
+    }
+    return deltaY;
+}
+
+function bindGlobalWheelToContainer() {
+    if (globalWheelBound) {
+        return;
+    }
+    var container = document.getElementById('scroll-container');
+    if (!container) {
+        return;
+    }
+
+    window.addEventListener('wheel', function (event) {
+        if (!container || container.contains(event.target)) {
+            return;
+        }
+
+        event.preventDefault();
+        container.scrollTop += normalizeWheelDelta(event);
+    }, { passive: false });
+
+    globalWheelBound = true;
+}
+
 function connectToBackground() {
     try {
         port = chrome.runtime.connect({ name: "detailspage" });
@@ -294,6 +328,7 @@ connectToBackground();
 $(document).ready(function () {
     detectedSystemFontMap = detectSystemFonts();
     refreshDetailsPage();
+    bindGlobalWheelToContainer();
 
     var openSection = null;
     try {
