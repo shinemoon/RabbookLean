@@ -216,6 +216,29 @@ function ensureReaderStylesMounted() {
     }
 }
 
+function reapplyReaderTypographyConfig() {
+    // 清理 host 样式会擦除 html 内联变量，导致字体/行距回退为默认值。
+    if (typeof applyReaderConfig === 'function') {
+        applyReaderConfig(rfontsize, rlinespacing, rcontentwidth, rfontfamily);
+        return;
+    }
+
+    var root = document.documentElement;
+    if (!root || !root.style) {
+        return;
+    }
+
+    if (typeof rfontsize === 'number' && isFinite(rfontsize) && rfontsize > 0) {
+        root.style.setProperty('--reader-font-size', rfontsize + 'px');
+    }
+    if (typeof rlinespacing === 'number' && isFinite(rlinespacing) && rlinespacing > 0) {
+        root.style.setProperty('--reader-line-height', rlinespacing);
+    }
+    if (typeof rcontentwidth === 'number' && isFinite(rcontentwidth) && rcontentwidth > 0) {
+        root.style.setProperty('--reader-content-width', rcontentwidth + 'px');
+    }
+}
+
 function purgeHostStyleArtifacts() {
     try {
         document.documentElement.removeAttribute('style');
@@ -306,6 +329,7 @@ function rewritePage(url, startp) {
     $('body').empty();
     purgeHostStyleArtifacts();
     ensureReaderStylesMounted();
+    reapplyReaderTypographyConfig();
     // 在追加任何内容前，彻底清理原始页面 head/body 中的脚本
     // 阻止任何原始页面的脚本被保留或执行
     try {
@@ -449,6 +473,7 @@ function rewritePage(url, startp) {
         return rel.indexOf('stylesheet') !== -1 || asAttr === 'style' || type === 'text/css';
     }).remove();
     ensureReaderStylesMounted();
+    reapplyReaderTypographyConfig();
     // 移除 body 中可能残留的 link/script/style/iframe（排除 ppage/npage）
     $('body').find('link, script, style, noscript, iframe:not(#ppage, #npage)').remove();
     // 重新确保 ppage/npage iframe 隐藏（上述清理可能间接影响其 display:none）
