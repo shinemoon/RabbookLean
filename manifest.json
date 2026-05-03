@@ -16,6 +16,13 @@
 	"background": {
 		"service_worker": "src/background.js"
 	},
+	"externally_connectable": {
+		"ids": [
+			"ipmdlkljiioildfgddmmkfdmdfehboal",
+			"fgkgjmmeoaojnhkeiebbibgbodikmgoe",
+			"ablggfkhbegbnlgjbleoklekinmglnia"
+		]
+	},
 	"sandbox": {
 		"pages": [
 			"src/sandbox.html"

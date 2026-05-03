@@ -7,6 +7,60 @@ var config = null;
 
 var DEFAULT_CONFIG = { 'bookmarks': [], "clist": [], "flist": [], "plist": [], "nlist": [], "tlist": [], "dir": false, "twocolumn": true, "css": null, "innight": false, "js": null, "fontsize": 16, "linespacing": 1.6, "contentwidth": 960, "fontfamily": '__embedded__' };
 
+// 允许访问本扩展外部消息接口的扩展 ID（与 manifest externally_connectable.ids 保持一致）
+var ALLOWED_EXTERNAL_IDS = {
+    "ipmdlkljiioildfgddmmkfdmdfehboal": true,
+    "fgkgjmmeoaojnhkeiebbibgbodikmgoe": true,
+    "ablggfkhbegbnlgjbleoklekinmglnia": true
+};
+
+// 测试函数：向指定白名单扩展发送 init 消息
+function extPing(extensionId) {
+    if (!extensionId || !ALLOWED_EXTERNAL_IDS[extensionId]) {
+        console.warn('extPing: extensionId is missing or not in allow list:', extensionId);
+        return;
+    }
+
+    chrome.runtime.sendMessage(extensionId, { type: 'rabbook', content: 'init' }, function (response) {
+        if (chrome.runtime.lastError) {
+            var errMsg = chrome.runtime.lastError.message || '';
+            // 对端未调用 sendResponse 时，Chrome 会返回该提示，但消息通常已成功送达。
+            if (errMsg.indexOf('The message port closed before a response was received') !== -1) {
+                console.info('extPing status:', extensionId, 'sent_no_response');
+                return;
+            }
+            console.warn('extPing status:', extensionId, 'failed', errMsg);
+            return;
+        }
+        console.log('extPing status:', extensionId, 'acknowledged', response);
+    });
+}
+
+// 测试函数：向白名单内全部扩展发送 init 消息
+function extPingAll(reason) {
+    var ids = Object.keys(ALLOWED_EXTERNAL_IDS);
+    if (ids.length === 0) {
+        console.warn('extPingAll: allow list is empty');
+        return;
+    }
+
+    console.info('extPingAll: sending init to', ids.length, 'extensions', reason ? ('reason=' + reason) : '');
+    for (var i = 0; i < ids.length; i++) {
+        extPing(ids[i]);
+    }
+}
+
+globalThis.extPing = extPing;
+globalThis.extPingAll = extPingAll;
+
+chrome.runtime.onStartup.addListener(function () {
+    extPingAll('onStartup');
+});
+
+chrome.runtime.onInstalled.addListener(function () {
+    extPingAll('onInstalled');
+});
+
 // Allowd url , only from bookmark page!
 var allowedurl = null;
 
@@ -67,6 +121,141 @@ chrome.runtime.onConnect.addListener(function (port) {
         // 配置尚未就绪，先放入队列
         pendingConnections.push(port);
     }
+});
+
+function isAllowedExternalSender(sender) {
+    return !!(sender && sender.id && ALLOWED_EXTERNAL_IDS[sender.id]);
+}
+
+function getExternalConfigPayload() {
+    var payload = config || DEFAULT_CONFIG;
+    return {
+        clist: payload.clist,
+        flist: payload.flist,
+        plist: payload.plist,
+        nlist: payload.nlist,
+        tlist: payload.tlist,
+        dir: payload.dir,
+        twocolumn: payload.twocolumn,
+        css: payload.css,
+        js: payload.js,
+        innight: payload.innight,
+        fontsize: payload.fontsize,
+        linespacing: payload.linespacing,
+        contentwidth: payload.contentwidth,
+        fontfamily: payload.fontfamily
+    };
+}
+
+function openDetailsPage(openSection, callback) {
+    var detailsBaseUrl = chrome.runtime.getURL('src/details.html');
+    var targetUrl = detailsBaseUrl;
+    if (openSection) {
+        targetUrl += '?openSection=' + encodeURIComponent(openSection);
+    }
+
+    chrome.tabs.query({}, function (tabs) {
+        var existingTab = (tabs || []).find(function (tab) {
+            return tab && typeof tab.url === 'string' && tab.url.indexOf(detailsBaseUrl) === 0;
+        });
+
+        if (existingTab) {
+            chrome.tabs.update(existingTab.id, { active: true, url: targetUrl }, function () {
+                if (chrome.runtime.lastError) {
+                    callback({ ok: false, error: 'open_details_failed', message: chrome.runtime.lastError.message });
+                    return;
+                }
+                callback({ ok: true, type: 'readpaperutils', content: 'open', action: 'details_opened' });
+            });
+            return;
+        }
+
+        chrome.tabs.create({ url: targetUrl, active: true }, function () {
+            if (chrome.runtime.lastError) {
+                callback({ ok: false, error: 'open_details_failed', message: chrome.runtime.lastError.message });
+                return;
+            }
+            callback({ ok: true, type: 'readpaperutils', content: 'open', action: 'details_opened' });
+        });
+    });
+}
+
+function handleExternalRequest(message, respond) {
+    var msg = message || {};
+
+    // 兼容约定：任何 content=init 的输入都返回 { ok: true }
+    if (msg.content === 'init') {
+        respond({ ok: true });
+        return false;
+    }
+
+    if (msg.type === 'readpaperutils' && msg.content === 'heartbeat') {
+        respond({ ok: true, type: 'rabbook', content: 'ack' });
+        return false;
+    }
+
+    // 新协议：{ type: 'readpaperutils', content: 'open' }
+    if (msg.type === 'readpaperutils' && msg.content === 'open') {
+        openDetailsPage('aboutdetails', function (result) {
+            respond(result);
+        });
+        return true;
+    }
+
+    // 兼容已有简化协议
+    if (msg.type === 'ping') {
+        respond({ ok: true, type: 'pong', extension: 'LeanRabbook' });
+        return false;
+    }
+
+    if (msg.type === 'getConfig') {
+        getLatestConfig(function () {
+            respond({ ok: true, type: 'config', config: getExternalConfigPayload() });
+        });
+        return true;
+    }
+
+    if (msg.type === 'injectActiveTab') {
+        getLatestConfig(function (latest) {
+            readPage(latest, null);
+            respond({ ok: true, type: 'inject_started' });
+        });
+        return true;
+    }
+
+    respond({ ok: false, error: 'unsupported_type', type: msg.type || null, content: msg.content || null });
+    return false;
+}
+
+// 外部一次性消息接口
+chrome.runtime.onMessageExternal.addListener(function (message, sender, sendResponse) {
+    if (!isAllowedExternalSender(sender)) {
+        sendResponse({ ok: false, error: 'forbidden_sender' });
+        return false;
+    }
+
+    return handleExternalRequest(message, sendResponse);
+});
+
+// 外部长连接接口
+chrome.runtime.onConnectExternal.addListener(function (port) {
+    if (!isAllowedExternalSender(port && port.sender)) {
+        try {
+            port.disconnect();
+        } catch (e) {
+            console.warn('external port disconnect failed:', e.message);
+        }
+        return;
+    }
+
+    // 外部扩展连入时，主动发送初始化握手消息
+    port.postMessage({ ok: true, type: 'rabbook', content: 'init' });
+
+    port.onMessage.addListener(function (msg) {
+        handleExternalRequest(msg, function (payload) {
+            port.postMessage(payload);
+        });
+    });
 });
 
 // 初始化配置读取

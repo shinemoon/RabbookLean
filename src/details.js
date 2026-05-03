@@ -294,6 +294,19 @@ connectToBackground();
 $(document).ready(function () {
     detectedSystemFontMap = detectSystemFonts();
     refreshDetailsPage();
+
+    var openSection = null;
+    try {
+        openSection = new URLSearchParams(window.location.search).get('openSection');
+    } catch (e) {
+        openSection = null;
+    }
+    if (openSection) {
+        setTimeout(function () {
+            openSectionCard(openSection);
+        }, 30);
+    }
+
     // Version Update
     // Get the manifest object
     const manifest = chrome.runtime.getManifest();
@@ -302,6 +315,48 @@ $(document).ready(function () {
     const manifestVersion = manifest.version;
     $('#verid').html(manifestVersion);
 });
+
+function openSectionCard(toggleTarget) {
+    if (!toggleTarget) {
+        return false;
+    }
+
+    var selector = '.section-card[toggle_target="' + toggleTarget + '"]';
+    var $targetCard = $(selector).eq(0);
+    if ($targetCard.length === 0) {
+        return false;
+    }
+
+    var $allCards = $('.section-card');
+    $allCards.each(function () {
+        var $card = $(this);
+        var $body = $card.find('.section-body').eq(0);
+        var $header = $card.find('.section-header').eq(0);
+        var $arrow = $header.find('.section-arrow').eq(0);
+
+        if ($card.is($targetCard)) {
+            return;
+        }
+
+        $body.stop(true, true).hide().removeClass('is-open');
+        $header.removeClass('is-open');
+        $arrow.removeClass('is-open');
+    });
+
+    var $targetBody = $targetCard.find('.section-body').eq(0);
+    var $targetHeader = $targetCard.find('.section-header').eq(0);
+    var $targetArrow = $targetHeader.find('.section-arrow').eq(0);
+
+    $targetBody.stop(true, true).show().addClass('is-open');
+    $targetHeader.addClass('is-open');
+    $targetArrow.addClass('is-open');
+
+    var element = $targetCard.get(0);
+    if (element && typeof element.scrollIntoView === 'function') {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    return true;
+}
 
 function refreshDetailsPage() {
     chrome.storage.local.get({
