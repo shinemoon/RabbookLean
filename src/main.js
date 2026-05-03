@@ -238,6 +238,7 @@ function connectToBackground() {
             rnlist = msg.nlist;
             rdir = msg.dir;
             rtwocolumn = msg.twocolumn;
+            rcss = msg.css;
             rjs = msg.js;
             inNight = msg.innight;
             // 字体和排版优先读取 storage 最新值，避免端口消息缓存导致字体不切换。
@@ -275,6 +276,7 @@ var rplist = [];
 var rnlist = [];
 var rdir = true;
 var rtwocolumn = false;
+var rcss = null;
 var rjs = null;
 var rfontfamily = '';
 var readerLayoutConfigReady = false;

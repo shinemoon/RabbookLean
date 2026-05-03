@@ -148,6 +148,150 @@ function createReaderEngine($container, options) {
     };
 }
 
+var RB_READER_STYLE_ATTR = 'data-rb-reader-style';
+
+function isReaderStyleNode(node) {
+    if (!node || !node.getAttribute) {
+        return false;
+    }
+    if (String(node.getAttribute(RB_READER_STYLE_ATTR) || '') === '1') {
+        return true;
+    }
+    if (node.tagName && node.tagName.toUpperCase() === 'LINK') {
+        try {
+            var href = String(node.getAttribute('href') || '');
+            var extRoot = chrome && chrome.runtime ? chrome.runtime.getURL('') : '';
+            if (extRoot && href.indexOf(extRoot) === 0) {
+                return true;
+            }
+        } catch (e) {}
+    }
+    return false;
+}
+
+function ensureReaderStylesMounted() {
+    var head = document.head || document.documentElement;
+    if (!head) {
+        return;
+    }
+
+    function ensureLink(id, href) {
+        if (!href) {
+            return;
+        }
+        var link = document.getElementById(id);
+        if (!link) {
+            link = document.createElement('link');
+            link.id = id;
+            link.rel = 'stylesheet';
+            head.appendChild(link);
+        }
+        link.setAttribute(RB_READER_STYLE_ATTR, '1');
+        if (link.getAttribute('href') !== href) {
+            link.setAttribute('href', href);
+        }
+    }
+
+    try {
+        ensureLink('rb-style-design-tokens', chrome.runtime.getURL('src/design-tokens.css'));
+        ensureLink('rb-style-main', chrome.runtime.getURL('src/main.css'));
+        ensureLink('rb-style-font', chrome.runtime.getURL('src/font/style.css'));
+    } catch (e) {}
+
+    var customCss = (typeof rcss === 'string') ? rcss.trim() : '';
+    var customStyleId = 'rb-style-custom';
+    var customStyleEl = document.getElementById(customStyleId);
+    if (customCss) {
+        if (!customStyleEl) {
+            customStyleEl = document.createElement('style');
+            customStyleEl.id = customStyleId;
+            head.appendChild(customStyleEl);
+        }
+        customStyleEl.setAttribute(RB_READER_STYLE_ATTR, '1');
+        if (customStyleEl.textContent !== customCss) {
+            customStyleEl.textContent = customCss;
+        }
+    } else if (customStyleEl) {
+        customStyleEl.remove();
+    }
+}
+
+function purgeHostStyleArtifacts() {
+    try {
+        document.documentElement.removeAttribute('style');
+        document.documentElement.removeAttribute('class');
+    } catch (e) {}
+    try {
+        document.body.removeAttribute('style');
+        document.body.removeAttribute('class');
+    } catch (e) {}
+
+    var $head = $('head');
+    $head.find('style, noscript').filter(function () {
+        return !isReaderStyleNode(this);
+    }).remove();
+    $head.find('link').filter(function () {
+        if (isReaderStyleNode(this)) {
+            return false;
+        }
+        var rel = String(this.getAttribute('rel') || '').toLowerCase();
+        var asAttr = String(this.getAttribute('as') || '').toLowerCase();
+        var type = String(this.getAttribute('type') || '').toLowerCase();
+        return rel.indexOf('stylesheet') !== -1 || asAttr === 'style' || type === 'text/css';
+    }).remove();
+    $('head').find('[style]').each(function () {
+        if (!isReaderStyleNode(this)) {
+            this.removeAttribute('style');
+        }
+    });
+}
+
+function stripDangerousInlineAttrs($root) {
+    if (!$root || $root.length === 0) {
+        return;
+    }
+
+    $root.find('style, link, script, noscript, iframe, object, embed').remove();
+    $root.find('*').each(function () {
+        var el = this;
+        var $el = $(el);
+        var idVal = $el.attr('id');
+
+        $el.removeAttr('style');
+        $el.removeAttr('class');
+        $el.removeAttr('width');
+        $el.removeAttr('height');
+        $el.removeAttr('color');
+        $el.removeAttr('bgcolor');
+        $el.removeAttr('face');
+
+        if (idVal && idVal !== 'gnContent') {
+            $el.removeAttr('id');
+        }
+
+        if (el.attributes) {
+            for (var i = el.attributes.length - 1; i >= 0; i--) {
+                var attrName = el.attributes[i].name;
+                if (/^on/i.test(attrName)) {
+                    el.removeAttribute(attrName);
+                }
+            }
+        }
+    });
+}
+
+function sanitizeLoadedContentMarkup(markup) {
+    var $wrap = $('<div></div>');
+    if (typeof markup === 'string') {
+        $wrap.html(markup);
+    } else if (markup != null) {
+        $wrap.append($(markup).clone(false, false));
+    }
+
+    stripDangerousInlineAttrs($wrap);
+    return $wrap.html();
+}
+
 function rewritePage(url, startp) {
     let buf = fetchBuf(generateShortHash(url));
     if (buf == null) {
@@ -160,6 +304,8 @@ function rewritePage(url, startp) {
     loadedContent = buf.content;
 
     $('body').empty();
+    purgeHostStyleArtifacts();
+    ensureReaderStylesMounted();
     // 在追加任何内容前，彻底清理原始页面 head/body 中的脚本
     // 阻止任何原始页面的脚本被保留或执行
     try {
@@ -176,6 +322,7 @@ function rewritePage(url, startp) {
         loadedContent[4] = loadedContent[4].replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript\s*>/gi, '');
         loadedContent[4] = loadedContent[4].replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
     }
+    loadedContent[4] = sanitizeLoadedContentMarkup(loadedContent[4]);
     //    $('body').attr('style','');
     $('body').attr('style', '');
 
@@ -192,6 +339,7 @@ function rewritePage(url, startp) {
     //Content
     $('body').append($(loadedContent[4]));
     if ($('#gnContent').length > 0) {
+        stripDangerousInlineAttrs($('#gnContent'));
         $('#gnContent').wrap('<div id="rbNightLayer"></div>');
     }
     $('body').find('a').remove();
@@ -272,6 +420,12 @@ function rewritePage(url, startp) {
                 if (!node.tagName) return;
                 var tag = node.tagName.toUpperCase();
                 if (tag === 'SCRIPT') { node.parentNode && node.parentNode.removeChild(node); }
+                if (tag === 'STYLE' && !isReaderStyleNode(node)) { node.parentNode && node.parentNode.removeChild(node); }
+                if (tag === 'LINK' && node.rel && String(node.rel).toLowerCase().indexOf('stylesheet') !== -1) {
+                    if (!isReaderStyleNode(node)) {
+                        node.parentNode && node.parentNode.removeChild(node);
+                    }
+                }
                 if (tag === 'IFRAME' && node.id !== 'ppage' && node.id !== 'npage' && node.id !== 'sandbox') {
                     node.parentNode && node.parentNode.removeChild(node);
                 }
@@ -281,7 +435,20 @@ function rewritePage(url, startp) {
     window._rbScriptGuard.observe(document.documentElement, { childList: true, subtree: true });
 
     // 6. 移除 head 中残留的 link/style/script 标签（保留扩展自身注入的）
-    $('head').find('link, style, script').not('[src*="main.css"], [src*="main.js"], [src*="pageRewrite"]').remove();
+    $('head').find('script, noscript').remove();
+    $('head').find('style').filter(function () {
+        return !isReaderStyleNode(this);
+    }).remove();
+    $('head').find('link').filter(function () {
+        if (isReaderStyleNode(this)) {
+            return false;
+        }
+        var rel = String(this.getAttribute('rel') || '').toLowerCase();
+        var asAttr = String(this.getAttribute('as') || '').toLowerCase();
+        var type = String(this.getAttribute('type') || '').toLowerCase();
+        return rel.indexOf('stylesheet') !== -1 || asAttr === 'style' || type === 'text/css';
+    }).remove();
+    ensureReaderStylesMounted();
     // 移除 body 中可能残留的 link/script/style/iframe（排除 ppage/npage）
     $('body').find('link, script, style, noscript, iframe:not(#ppage, #npage)').remove();
     // 重新确保 ppage/npage iframe 隐藏（上述清理可能间接影响其 display:none）
