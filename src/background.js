@@ -348,9 +348,10 @@ function handlePort(port) {
     if (port.name == 'contpage') {
         cntport = port;
         cntport.postMessage({ "type": "cfg", "clist": config.clist, "flist": config.flist, "plist": config.plist, "nlist": config.nlist, "dir": config.dir, "twocolumn": config.twocolumn, "tlist": config.tlist, "css": config.css, "js": config.js,"innight":config.innight, "fontsize": config.fontsize, "linespacing": config.linespacing, "contentwidth": config.contentwidth, "fontfamily": config.fontfamily });
-        // 发送完配置后，理论上就Go了
-        // TODO: Progress passing
-        cntport.postMessage({ "type": "go", "progress": null });
+        // 发送完配置后恢复当前 tab 的阅读进度，避免重连后回到第一页。
+        var senderUrl = port && port.sender && port.sender.tab ? port.sender.tab.url : '';
+        var restoredProgress = findBookmarkProgressForUrl(senderUrl, config && config.bookmarks ? config.bookmarks : []);
+        cntport.postMessage({ "type": "go", "progress": restoredProgress });
         // 监听从这个 cntport 收到的消息
         //  用来更新书签
         cntport.onMessage.addListener(function (msg) {
@@ -363,6 +364,13 @@ function handlePort(port) {
             if (msg.type == "updatebk") {
                 // To update bookmark in serviced worker
                 bklist = config.bookmarks;
+                var incomingProgress = clampProgress(msg.progress);
+                if (incomingProgress === null) {
+                    incomingProgress = clampProgress(msg.curprog);
+                }
+                if (incomingProgress === null) {
+                    incomingProgress = 0;
+                }
                 // Update bookmark
                 for (var i = 0; i < bklist.length; i++) {
                     if (sameNovel(bklist[i].cururl, msg.cururl)) {
@@ -370,7 +378,7 @@ function handlePort(port) {
                         break;
                     }
                 };
-                bklist.push({ rTitle: msg.rTitle, cururl: msg.cururl, curprog: msg.curprog });
+                bklist.push({ rTitle: msg.rTitle, cururl: msg.cururl, curprog: incomingProgress });
                 chrome.storage.local.set({ 'bookmarks': bklist }, function () {
                     console.info("Bookmarks Updated Done");
                     if (detport != null)
@@ -415,6 +423,66 @@ function sameNovel(u1, u2) {
         return cr;
     }
 };
+
+function normalizeBookmarkUrl(url) {
+    if (!url || typeof url !== 'string') {
+        return '';
+    }
+    try {
+        var parsed = new URL(url);
+        var normalizedPath = (parsed.pathname || '/').replace(/\/+$/, '') || '/';
+        return parsed.origin + normalizedPath;
+    } catch (e) {
+        return String(url).split('#')[0].split('?')[0].replace(/\/+$/, '');
+    }
+}
+
+function clampProgress(raw) {
+    var n = Number(raw);
+    if (!isFinite(n)) {
+        return null;
+    }
+    if (n < 0) {
+        return 0;
+    }
+    if (n > 1) {
+        return 1;
+    }
+    return n;
+}
+
+function findBookmarkProgressForUrl(tabUrl, bookmarks) {
+    var list = Array.isArray(bookmarks) ? bookmarks : [];
+    if (list.length === 0) {
+        return null;
+    }
+
+    var normalizedTabUrl = normalizeBookmarkUrl(tabUrl);
+
+    // 优先精确匹配章节 URL。
+    for (var i = list.length - 1; i >= 0; i--) {
+        var bm = list[i] || {};
+        if (normalizeBookmarkUrl(bm.cururl) === normalizedTabUrl) {
+            var exactProgress = clampProgress(bm.curprog);
+            if (exactProgress !== null) {
+                return exactProgress;
+            }
+        }
+    }
+
+    // 兼容旧数据：章节 URL 不一致时，退化为同书匹配的最近记录。
+    for (var j = list.length - 1; j >= 0; j--) {
+        var fallbackBm = list[j] || {};
+        if (sameNovel(fallbackBm.cururl || '', tabUrl || '')) {
+            var fallbackProgress = clampProgress(fallbackBm.curprog);
+            if (fallbackProgress !== null) {
+                return fallbackProgress;
+            }
+        }
+    }
+
+    return null;
+}
 
 // 检查 URL 是否可注入（排除 about:blank、chrome://、edge:// 等不可注入页面）
 function isInjectionAllowed(tabUrl) {

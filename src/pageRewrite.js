@@ -626,7 +626,7 @@ function rewritePage(url, startp) {
             $('#totalindex').text(pages);
             progress = (floor.to) / pages;
             try {
-                port.postMessage({ type: "updatebk", rTitle: rTitle, cururl: cururl, progress: progress });
+                port.postMessage({ type: "updatebk", rTitle: rTitle, cururl: cururl, progress: progress, curprog: progress });
             } catch (error) {
                 console.error("Port is disconnected", error);
             }
@@ -713,7 +713,7 @@ function rewritePage(url, startp) {
 
     //cururl = window.location.href;
     try {
-        port.postMessage({ type: "updatebk", rTitle: rTitle, cururl: cururl, progress: progress });
+        port.postMessage({ type: "updatebk", rTitle: rTitle, cururl: cururl, progress: progress, curprog: progress });
     } catch (error) {
         console.error("Port is disconnected", error);
     }
