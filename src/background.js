@@ -402,6 +402,87 @@ async function listReadingTimeRecords() {
     }
 }
 
+async function cleanupOrphanReadingTimeRecords() {
+    var db = await openRabbookDb();
+    try {
+        var readTx = db.transaction([RABBOOK_STACK_STORE, RABBOOK_TIME_STORE], 'readonly');
+        var stackStore = readTx.objectStore(RABBOOK_STACK_STORE);
+        var timeStore = readTx.objectStore(RABBOOK_TIME_STORE);
+
+        var bookmarks = await txRequestToPromise(stackStore.getAll());
+        var rows = await txRequestToPromise(timeStore.getAll());
+
+        var existingKeys = {};
+        for (var i = 0; i < bookmarks.length; i++) {
+            var bk = bookmarks[i];
+            if (!bk) {
+                continue;
+            }
+            var bkKey = bk.cururlKey || getBookIdentityKey(bk.cururl || '');
+            if (bkKey) {
+                existingKeys[bkKey] = true;
+            }
+        }
+
+        var grouped = {};
+        for (var j = 0; j < rows.length; j++) {
+            var row = rows[j];
+            if (!row || !row.id) {
+                continue;
+            }
+            var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
+            if (!rowKey || !existingKeys[rowKey]) {
+                grouped['__orphan__' + j] = grouped['__orphan__' + j] || [];
+                grouped['__orphan__' + j].push(row);
+                continue;
+            }
+            if (!grouped[rowKey]) {
+                grouped[rowKey] = [];
+            }
+            grouped[rowKey].push(row);
+        }
+
+        var deleteIds = [];
+        var keys = Object.keys(grouped);
+        for (var g = 0; g < keys.length; g++) {
+            var key = keys[g];
+            var list = grouped[key] || [];
+            if (key.indexOf('__orphan__') === 0) {
+                for (var o = 0; o < list.length; o++) {
+                    deleteIds.push(list[o].id);
+                }
+                continue;
+            }
+            if (list.length <= 1) {
+                continue;
+            }
+            list.sort(function (a, b) {
+                return Number(b && b.updatedAt || 0) - Number(a && a.updatedAt || 0);
+            });
+            for (var d = 1; d < list.length; d++) {
+                deleteIds.push(list[d].id);
+            }
+        }
+
+        if (deleteIds.length > 0) {
+            var writeTx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+            var writeStore = writeTx.objectStore(RABBOOK_TIME_STORE);
+            for (var x = 0; x < deleteIds.length; x++) {
+                await txRequestToPromise(writeStore.delete(deleteIds[x]));
+            }
+        }
+
+        return {
+            ok: true,
+            deletedCount: deleteIds.length,
+            totalCount: rows.length,
+            remainingCount: rows.length - deleteIds.length
+        };
+    } finally {
+        db.close();
+    }
+}
+
 async function syncReadingTimeUniqueIdByBookmarkId(bookmarkId, bookuniqueid) {
     if (!bookmarkId || bookmarkId.indexOf('::') <= 0) {
         return { ok: false, error: 'invalid_bookmark_id' };
@@ -1152,6 +1233,18 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             sendResponse({ ok: true, readingTime: rows });
         }).catch(function (err) {
             sendResponse({ ok: false, error: 'readingtime_get_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'readingTimeCleanupOrphans') {
+        cleanupOrphanReadingTimeRecords().then(function (ret) {
+            if (ret && ret.ok) {
+                notifyDetailsRefresh();
+            }
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'readingtime_cleanup_failed', message: err && err.message ? err.message : String(err) });
         });
         return true;
     }

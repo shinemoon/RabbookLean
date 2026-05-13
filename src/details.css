@@ -412,6 +412,17 @@ textarea.form-input {
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
 }
 
+.btn-warning {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.btn-warning:hover {
+  background: rgba(245, 158, 11, 0.26);
+  border-color: rgba(245, 158, 11, 0.62);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--color-text-secondary);
@@ -571,6 +582,10 @@ textarea.form-input {
 }
 
 .readingtime-sync-btn {
+  padding: var(--space-2) var(--space-4);
+}
+
+.readingtime-clean-btn {
   padding: var(--space-2) var(--space-4);
 }
 

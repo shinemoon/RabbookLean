@@ -965,6 +965,19 @@ function deleteBookmarkById(bookmarkId) {
     });
 }
 
+function cleanupReadingTimeOrphans() {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage({ type: 'readingTimeCleanupOrphans' }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.warn('cleanupReadingTimeOrphans failed:', chrome.runtime.lastError.message);
+                resolve({ ok: false, deletedCount: 0, totalCount: 0 });
+                return;
+            }
+            resolve(response || { ok: false, deletedCount: 0, totalCount: 0 });
+        });
+    });
+}
+
 function setBookmarkUniqueId(bookmarkId, bookuniqueid) {
     return new Promise(function (resolve) {
         chrome.runtime.sendMessage({ type: 'bookmarkSetUniqueId', id: bookmarkId, bookuniqueid: bookuniqueid }, function (response) {
@@ -1326,6 +1339,22 @@ function displayPage() {
             return;
         }
         openXmnoteSyncModal();
+    });
+
+    $('#readingtime-clean-btn').off('click').on('click', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var ok = await showConfirmDialog('清理不存在的书籍记录', '清理记录');
+        if (!ok) {
+            return;
+        }
+        var ret = await cleanupReadingTimeOrphans();
+        if (!ret || !ret.ok) {
+            showToast('清理失败，请稍后重试。', 'danger', 2600);
+            return;
+        }
+        showToast('清理完成：已移除 ' + Number(ret.deletedCount || 0) + ' 条孤立阅读时间记录。');
+        refreshDetailsPage();
     });
 
     $('.uid.spanbut').off('click').on('click', async function (e) {
