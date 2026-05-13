@@ -1444,6 +1444,28 @@ function normalizeXmnoteImportRecord(rec) {
         var rangeEnd = new Date((lastBucket.date + 3600) * 1000).toISOString();
         rangeNote = '\n小时范围: ' + rangeStart + ' ~ ' + rangeEnd;
     }
+    var rawEntries = Array.isArray(row.entries) ? row.entries : [];
+    var mappedEntries = [];
+    for (var ei = 0; ei < rawEntries.length; ei++) {
+        var item = rawEntries[ei] || {};
+        var entryText = String(item.text || '').trim();
+        if (!entryText) {
+            continue;
+        }
+        var entryTs = Number(item.time || 0);
+        if (!Number.isFinite(entryTs) || entryTs <= 0) {
+            entryTs = lastReadAtSec;
+        }
+        if (entryTs > 1000000000000) {
+            entryTs = Math.floor(entryTs / 1000);
+        }
+        mappedEntries.push({
+            text: entryText,
+            note: String(item.note || '').trim(),
+            chapter: String(item.chapter || '').trim(),
+            time: Math.floor(entryTs)
+        });
+    }
     return {
         uniqueid: uniqueid,
         title: String(row.title || row.rTitle || ''),
@@ -1456,14 +1478,7 @@ function normalizeXmnoteImportRecord(rec) {
         fuzzyReadingDurations: fuzzy,
         currentPage: 0,
         totalPageCount: 100,
-        entries: [
-            {
-                chapter: '阅读时间同步',
-                text: '阅读时间导入（uniqueid=' + uniqueid + '）',
-                note: '来源: LeanRabbook\nURL: ' + String(row.cururl || '') + rangeNote,
-                time: lastReadAtSec
-            }
-        ]
+        entries: mappedEntries
     };
 }
 
@@ -1788,6 +1803,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 var normalizedUniqueId = normalizeUniqueId((row && (row.bookuniqueid || row.uniqueid)) || '');
                 var entries = Array.isArray(row.entries) ? row.entries : [];
                 entries.forEach(function (entry) {
+                    if (!entry || String(entry.chapter || '') === '阅读时间同步') {
+                        return;
+                    }
                     allEntries.push({
                         bookmarkId: row.bookmarkId,
                         uniqueid: normalizedUniqueId,

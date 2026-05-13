@@ -665,12 +665,7 @@ function syncReadingTimeToXmnote(endpoint, records) {
             });
         }
         if (mappedEntries.length === 0) {
-            mappedEntries.push({
-                chapter: '阅读时间同步',
-                text: '阅读时间导入（uniqueid=' + uniqueid + '）',
-                note: '来源: LeanRabbook\nURL: ' + String(row && row.cururl || '') + rangeNote,
-                time: lastReadAtSec
-            });
+            // 无真实书摘时发送空 entries，不生成占位条目
         }
 
         return {
