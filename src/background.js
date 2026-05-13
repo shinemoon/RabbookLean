@@ -70,8 +70,210 @@ var fromDetails = false;
 // Bookmark list variable
 var bklist = [];
 
+var RABBOOK_DB_NAME = 'rabbook_db';
+var RABBOOK_DB_VERSION = 1;
+var RABBOOK_STACK_STORE = 'reading_stack';
+var LEGACY_BOOKMARKS_MIGRATED_FLAG = 'bookmarks_db_migrated';
+
 // 标志：配置是否已就绪
 var configReady = false;
+
+function openRabbookDb() {
+    return new Promise(function (resolve, reject) {
+        var req = indexedDB.open(RABBOOK_DB_NAME, RABBOOK_DB_VERSION);
+        req.onupgradeneeded = function (event) {
+            var db = event.target.result;
+            if (!db.objectStoreNames.contains(RABBOOK_STACK_STORE)) {
+                var store = db.createObjectStore(RABBOOK_STACK_STORE, { keyPath: 'id' });
+                store.createIndex('updatedAt', 'updatedAt', { unique: false });
+            }
+        };
+        req.onsuccess = function () {
+            resolve(req.result);
+        };
+        req.onerror = function () {
+            reject(req.error || new Error('openRabbookDb failed'));
+        };
+    });
+}
+
+function txRequestToPromise(req) {
+    return new Promise(function (resolve, reject) {
+        req.onsuccess = function () {
+            resolve(req.result);
+        };
+        req.onerror = function () {
+            reject(req.error || new Error('indexedDB request failed'));
+        };
+    });
+}
+
+function getUrlIdentityKey(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return '';
+    }
+    try {
+        var parsed = new URL(rawUrl);
+        var path = parsed.pathname || '/';
+        if (path.length > 1 && path[path.length - 1] === '/') {
+            path = path.slice(0, -1);
+        }
+        return parsed.origin + path + (parsed.search || '');
+    } catch (e) {
+        var normalized = rawUrl.split('#')[0];
+        if (normalized.length > 1 && normalized[normalized.length - 1] === '/') {
+            normalized = normalized.slice(0, -1);
+        }
+        return normalized;
+    }
+}
+
+function normalizeBookmarkRecord(input) {
+    var cururl = (input && input.cururl) || '';
+    var progressRaw = null;
+    if (input && typeof input.curprog !== 'undefined') {
+        progressRaw = input.curprog;
+    } else if (input && typeof input.progress !== 'undefined') {
+        progressRaw = input.progress;
+    }
+    var curprog = Number(progressRaw);
+    if (!Number.isFinite(curprog)) {
+        curprog = 0;
+    }
+    var cururlKey = getUrlIdentityKey(cururl);
+    return {
+        id: 'url::' + cururlKey,
+        cururlKey: cururlKey,
+        rTitle: (input && input.rTitle) || '',
+        cururl: cururl,
+        curprog: curprog,
+        bookuniqueid: (input && typeof input.bookuniqueid === 'string') ? input.bookuniqueid.trim() : '',
+        updatedAt: Date.now()
+    };
+}
+
+async function upsertBookmarkRecord(input) {
+    var record = normalizeBookmarkRecord(input);
+    if (!record.id || !record.cururl || !record.cururlKey) {
+        return { ok: false, error: 'invalid_bookmark' };
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_STACK_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_STACK_STORE);
+        var existing = null;
+
+        // 兼容旧版本数据：优先按 cururl 精确匹配已有记录，避免不同 cururl 被自动合并
+        var rows = await txRequestToPromise(store.getAll());
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (!row) {
+                continue;
+            }
+            var rowUrlKey = row.cururlKey || getUrlIdentityKey(row.cururl || '');
+            if (rowUrlKey === record.cururlKey) {
+                existing = row;
+                break;
+            }
+        }
+
+        if (existing && existing.id) {
+            record.id = existing.id;
+        }
+        var hasInputUniqueId = !!(input && Object.prototype.hasOwnProperty.call(input, 'bookuniqueid'));
+        if (!hasInputUniqueId && existing && typeof existing.bookuniqueid === 'string') {
+            record.bookuniqueid = existing.bookuniqueid;
+        }
+        await txRequestToPromise(store.put(record));
+        return { ok: true, record: record };
+    } finally {
+        db.close();
+    }
+}
+
+async function listBookmarkRecords() {
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_STACK_STORE, 'readonly');
+        var store = tx.objectStore(RABBOOK_STACK_STORE);
+        var all = await txRequestToPromise(store.getAll());
+        all.sort(function (a, b) {
+            return (b.updatedAt || 0) - (a.updatedAt || 0);
+        });
+        return all;
+    } finally {
+        db.close();
+    }
+}
+
+async function deleteBookmarkById(bookmarkId) {
+    if (!bookmarkId) {
+        return { ok: false, error: 'missing_bookmark_id' };
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_STACK_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_STACK_STORE);
+        await txRequestToPromise(store.delete(bookmarkId));
+        return { ok: true };
+    } finally {
+        db.close();
+    }
+}
+
+async function updateBookmarkUniqueId(bookmarkId, bookuniqueid) {
+    if (!bookmarkId) {
+        return { ok: false, error: 'missing_bookmark_id' };
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_STACK_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_STACK_STORE);
+        var existing = await txRequestToPromise(store.get(bookmarkId));
+        if (!existing) {
+            return { ok: false, error: 'bookmark_not_found' };
+        }
+        existing.bookuniqueid = (typeof bookuniqueid === 'string' ? bookuniqueid.trim() : '');
+        existing.updatedAt = Date.now();
+        await txRequestToPromise(store.put(existing));
+        return { ok: true, record: existing };
+    } finally {
+        db.close();
+    }
+}
+
+function notifyDetailsRefresh() {
+    if (detport != null) {
+        detport.postMessage({ "type": "action", "content": "refresh" });
+    }
+}
+
+function migrateLegacyBookmarksIfNeeded() {
+    return new Promise(function (resolve) {
+        chrome.storage.local.get({ bookmarks: [], bookmarks_db_migrated: false }, async function (data) {
+            if (data.bookmarks_db_migrated) {
+                resolve();
+                return;
+            }
+
+            var oldList = data.bookmarks || [];
+            try {
+                for (var i = 0; i < oldList.length; i++) {
+                    await upsertBookmarkRecord(oldList[i]);
+                }
+                var setObj = {};
+                setObj[LEGACY_BOOKMARKS_MIGRATED_FLAG] = true;
+                chrome.storage.local.set(setObj, function () {
+                    console.info('Legacy bookmarks migrated to IndexedDB:', oldList.length);
+                    resolve();
+                });
+            } catch (err) {
+                console.warn('migrateLegacyBookmarksIfNeeded failed:', err && err.message ? err.message : err);
+                resolve();
+            }
+        });
+    });
+}
 
 function getLatestConfig(callback) {
     chrome.storage.local.get(DEFAULT_CONFIG, function (r) {
@@ -96,8 +298,10 @@ function initConfigAndListener() {
          "js": null , 自定义脚本
         */
         configReady = true;
-        // 处理队列中等待的连接
-        flushPendingConnections();
+        migrateLegacyBookmarksIfNeeded().finally(function () {
+            // 处理队列中等待的连接
+            flushPendingConnections();
+        });
     });
 }
 
@@ -258,6 +462,47 @@ chrome.runtime.onConnectExternal.addListener(function (port) {
     });
 });
 
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (!sender || sender.id !== chrome.runtime.id) {
+        return false;
+    }
+    var msg = message || {};
+    if (msg.type === 'bookmarksGetAll') {
+        listBookmarkRecords().then(function (rows) {
+            sendResponse({ ok: true, bookmarks: rows });
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'bookmarks_get_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'bookmarkDeleteById') {
+        deleteBookmarkById(msg.id).then(function (ret) {
+            if (ret.ok) {
+                notifyDetailsRefresh();
+            }
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'bookmark_delete_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'bookmarkSetUniqueId') {
+        updateBookmarkUniqueId(msg.id, msg.bookuniqueid).then(function (ret) {
+            if (ret.ok) {
+                notifyDetailsRefresh();
+            }
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'bookmark_set_uniqueid_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    return false;
+});
+
 // 初始化配置读取
 initConfigAndListener();
 
@@ -361,25 +606,15 @@ function handlePort(port) {
                 });
             };
             if (msg.type == "updatebk") {
-                // To update bookmark in serviced worker
-                bklist = config.bookmarks;
-                // Update bookmark
-                for (var i = 0; i < bklist.length; i++) {
-                    if (sameNovel(bklist[i].cururl, msg.cururl)) {
-                        bklist = bklist.slice(0, i).concat(bklist.slice(i + 1, bklist.length));
-                        break;
+                upsertBookmarkRecord(msg).then(function (ret) {
+                    if (ret.ok) {
+                        console.info("Bookmarks Updated Done (IndexedDB)");
+                        notifyDetailsRefresh();
+                        return;
                     }
-                };
-                bklist.push({ rTitle: msg.rTitle, cururl: msg.cururl, curprog: msg.curprog });
-                chrome.storage.local.set({ 'bookmarks': bklist }, function () {
-                    console.info("Bookmarks Updated Done");
-                    if (detport != null)
-                        detport.postMessage({ "type": "action", "content": "refresh" });
-                    /*
-                    detport.forEach(port => {
-                        port.postMessage({ "type": "action", "content": "refresh" });
-                    });
-                    */
+                    console.warn('updatebk failed:', ret.error || 'unknown');
+                }).catch(function (err) {
+                    console.error('updatebk exception:', err && err.message ? err.message : err);
                 });
             }
         });

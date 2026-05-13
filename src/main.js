@@ -30,6 +30,8 @@ var pgtimer = null;
 var PGTIME = 800;
 
 var reconnected = false;
+var reconnectTimer = null;
+var reconnectDisabled = false;
 
 
 // 全局变量
@@ -197,6 +199,10 @@ function applyReaderConfigFromStorageOrFallback(fallbackMsg) {
 
 // 建立与 Service Worker 的连接
 function connectToBackground() {
+    if (reconnectDisabled) {
+        return;
+    }
+
     // 页面 URL 无效时跳过连接，避免无效连接导致的 runtime.lastError
     if (!isValidPageForInjection()) {
         console.info("connectToBackground: invalid page, skipping connection.");
@@ -207,19 +213,30 @@ function connectToBackground() {
         port = chrome.runtime.connect({ name: "contpage" });
         // 检查连接是否出错
         if (chrome.runtime.lastError) {
-            console.warn("connectToBackground: runtime.lastError", chrome.runtime.lastError.message);
+            var runtimeErrorMessage = chrome.runtime.lastError.message || '';
+            console.warn("connectToBackground: runtime.lastError", runtimeErrorMessage);
+            if (isExtensionContextInvalidated(runtimeErrorMessage)) {
+                stopReconnect("runtime.lastError: " + runtimeErrorMessage);
+            }
             port = null;
         }
     } catch (error) {
-        console.warn("connectToBackground: connect failed", error.message);
+        var errMsg = (error && error.message) ? error.message : String(error || '');
+        console.warn("connectToBackground: connect failed", errMsg);
+        if (isExtensionContextInvalidated(errMsg)) {
+            stopReconnect("connect failed: " + errMsg);
+        }
         port = null;
     }
 
     // 连接失败，稍后重试
     if (!port) {
-        console.info("connectToBackground: port null, retrying in 100ms...");
+        if (reconnectDisabled) {
+            return;
+        }
+        console.info("connectToBackground: port null, retrying in 120ms...");
         reconnected = true;
-        setTimeout(connectToBackground, 100);
+        scheduleReconnect(120);
         return;
     }
 
@@ -257,10 +274,49 @@ function connectToBackground() {
     // 监听断开连接事件
     port.onDisconnect.addListener(() => {
         console.info("Disconnected from background script. Reconnecting...");
+        var disconnectErr = '';
+        try {
+            disconnectErr = (port && port.error && port.error.message) ? port.error.message : '';
+        } catch (e) {
+            disconnectErr = (e && e.message) ? e.message : '';
+        }
+        if (isExtensionContextInvalidated(disconnectErr)) {
+            stopReconnect("port disconnect: " + disconnectErr);
+            return;
+        }
         // 尝试重新连接
         reconnected = true;
-        setTimeout(connectToBackground, 10);
+        scheduleReconnect(20);
     });
+}
+
+function scheduleReconnect(delayMs) {
+    if (reconnectDisabled) {
+        return;
+    }
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+    }
+    reconnectTimer = setTimeout(function () {
+        reconnectTimer = null;
+        connectToBackground();
+    }, delayMs);
+}
+
+function isExtensionContextInvalidated(message) {
+    if (!message || typeof message !== 'string') {
+        return false;
+    }
+    return message.toLowerCase().indexOf('extension context invalidated') !== -1;
+}
+
+function stopReconnect(reason) {
+    reconnectDisabled = true;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    console.warn('connectToBackground: stop reconnect because extension context is invalidated.', reason || '');
 }
 
 // 初始化连接

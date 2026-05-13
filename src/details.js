@@ -393,12 +393,55 @@ function openSectionCard(toggleTarget) {
     return true;
 }
 
+function getBookmarksFromDb() {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage({ type: 'bookmarksGetAll' }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.warn('getBookmarksFromDb failed:', chrome.runtime.lastError.message);
+                resolve([]);
+                return;
+            }
+            if (!response || !response.ok || !Array.isArray(response.bookmarks)) {
+                resolve([]);
+                return;
+            }
+            resolve(response.bookmarks);
+        });
+    });
+}
+
+function deleteBookmarkById(bookmarkId) {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage({ type: 'bookmarkDeleteById', id: bookmarkId }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.warn('deleteBookmarkById failed:', chrome.runtime.lastError.message);
+                resolve(false);
+                return;
+            }
+            resolve(!!(response && response.ok));
+        });
+    });
+}
+
+function setBookmarkUniqueId(bookmarkId, bookuniqueid) {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage({ type: 'bookmarkSetUniqueId', id: bookmarkId, bookuniqueid: bookuniqueid }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.warn('setBookmarkUniqueId failed:', chrome.runtime.lastError.message);
+                resolve(false);
+                return;
+            }
+            resolve(!!(response && response.ok));
+        });
+    });
+}
+
 function refreshDetailsPage() {
     chrome.storage.local.get({
         'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [],
-        'dir': false, 'css': null, 'js': null, 'bookmarks': [], 'twocolumn': true,
+        'dir': false, 'css': null, 'js': null, 'twocolumn': true,
         'fontsize': 16, 'linespacing': 1.6, 'contentwidth': 960, 'fontfamily': READER_FONT_DEFAULT_VALUE
-    }, function (result) {
+    }, async function (result) {
         clist = result.clist;
         tlist = result.tlist;
         plist = result.plist;
@@ -408,7 +451,7 @@ function refreshDetailsPage() {
         rjs = result.js;
         dir = result.dir;
         twocolumn = result.twocolumn;
-        bklist = result.bookmarks;
+        bklist = await getBookmarksFromDb();
         fontfamily = result.fontfamily || READER_FONT_DEFAULT_VALUE;
         $('#text-selector').val(JSON.stringify(clist));
         $('#text-filter').val(JSON.stringify(flist));
@@ -448,26 +491,53 @@ function displayPage() {
     $('.bookmarks-list').empty();
 
     for (var i = 0; i < bklist.length; i++) {
-        var cstr = "<li><span class='spanbut del'>删</span><span class='linka' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + "</span></li>";
+        var bookmarkId = bklist[i].id || '';
+        var uniqueIdLabel = (bklist[i].bookuniqueid || '').trim();
+        var uidTag = uniqueIdLabel ? ("<span class='uid-tag'>ID: " + uniqueIdLabel + "</span>") : '';
+        var cstr = "<li><span class='spanbut uid' title='设置唯一ID'>ID</span><span class='spanbut del'>删</span><span class='linka' bookmark-id='" + bookmarkId + "' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + uidTag + "</span></li>";
         $('.bookmarks-list').append(cstr);
     }
+
+    $('.uid.spanbut').off('click').on('click', async function () {
+        var $target = $(this).parent().find('.linka').eq(0);
+        var bookmarkId = $target.attr('bookmark-id') || '';
+        var ind = Number($target.attr('ind'));
+        if (!bookmarkId || !Number.isFinite(ind) || !bklist[ind]) {
+            showToast('未找到对应记录。', 'danger', 2200);
+            return;
+        }
+        var oldVal = (bklist[ind].bookuniqueid || '').trim();
+        var nextVal = window.prompt('请输入该书籍唯一ID（留空可清除）', oldVal);
+        if (nextVal === null) {
+            return;
+        }
+        var ok = await setBookmarkUniqueId(bookmarkId, nextVal);
+        if (!ok) {
+            showToast('保存唯一ID失败，请稍后重试。', 'danger', 2400);
+            return;
+        }
+        showToast('唯一ID已更新');
+        setTimeout(function () {
+            window.location.reload();
+        }, 200);
+    });
 
     $('.del.spanbut').off('click').on('click', async function () {
         var ok = await showConfirmDialog('确定要删除这条阅读记录吗？', '删除确认');
         if (!ok) {
             return;
         }
-        var ind = $(this).parent().find('.linka').eq(0).attr('ind');
-        var tmplist = bklist.slice(0, Number(ind));
-        tmplist = tmplist.concat(bklist.slice(Number(ind) + 1, bklist.length));
-        bklist = tmplist;
-        chrome.storage.local.set({ 'bookmarks': bklist }, function () {
-            console.info("Bookmarks Updated Done");
-            showToast('已删除阅读记录');
-            setTimeout(function () {
-                window.location.reload();
-            }, 280);
-        });
+        var $target = $(this).parent().find('.linka').eq(0);
+        var bookmarkId = $target.attr('bookmark-id') || '';
+        var deleted = await deleteBookmarkById(bookmarkId);
+        if (!deleted) {
+            showToast('删除失败，请稍后重试。', 'danger', 2400);
+            return;
+        }
+        showToast('已删除阅读记录');
+        setTimeout(function () {
+            window.location.reload();
+        }, 280);
     });
 
 
@@ -475,9 +545,6 @@ function displayPage() {
     $('.linka').click(function () {
         var ind = $(this).attr('ind');
         console.log($(this).attr('ind'));
-        chrome.storage.local.set({ 'bookmarks': bklist }, function () {
-            console.info("Bookmarks Updated Done");
-        });
         //Open and injection
         // Let's register this one and try to inject?
         port.postMessage({ type: "register", url: $(this).attr('href') });
