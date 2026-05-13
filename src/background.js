@@ -71,9 +71,12 @@ var fromDetails = false;
 var bklist = [];
 
 var RABBOOK_DB_NAME = 'rabbook_db';
-var RABBOOK_DB_VERSION = 1;
+var RABBOOK_DB_VERSION = 2;
 var RABBOOK_STACK_STORE = 'reading_stack';
+var RABBOOK_TIME_STORE = 'reading_time';
 var LEGACY_BOOKMARKS_MIGRATED_FLAG = 'bookmarks_db_migrated';
+var READING_TIME_MAX_GAP_MS = 5 * 60 * 1000;
+var READING_TIME_SCHEMA_VERSION = 1;
 
 // 标志：配置是否已就绪
 var configReady = false;
@@ -86,6 +89,13 @@ function openRabbookDb() {
             if (!db.objectStoreNames.contains(RABBOOK_STACK_STORE)) {
                 var store = db.createObjectStore(RABBOOK_STACK_STORE, { keyPath: 'id' });
                 store.createIndex('updatedAt', 'updatedAt', { unique: false });
+            }
+            if (!db.objectStoreNames.contains(RABBOOK_TIME_STORE)) {
+                var timeStore = db.createObjectStore(RABBOOK_TIME_STORE, { keyPath: 'id' });
+                timeStore.createIndex('cururlKey', 'cururlKey', { unique: true });
+                timeStore.createIndex('cururl', 'cururl', { unique: false });
+                timeStore.createIndex('uniqueid', 'uniqueid', { unique: false });
+                timeStore.createIndex('updatedAt', 'updatedAt', { unique: false });
             }
         };
         req.onsuccess = function () {
@@ -108,23 +118,27 @@ function txRequestToPromise(req) {
     });
 }
 
-function getUrlIdentityKey(rawUrl) {
+function getBookIdentityKey(rawUrl) {
     if (!rawUrl || typeof rawUrl !== 'string') {
         return '';
     }
     try {
         var parsed = new URL(rawUrl);
-        var path = parsed.pathname || '/';
-        if (path.length > 1 && path[path.length - 1] === '/') {
-            path = path.slice(0, -1);
+        var parts = (parsed.pathname || '').split('/').filter(function (it) { return !!it; });
+        if (parts.length > 0) {
+            parts = parts.slice(0, parts.length - 1);
         }
-        return parsed.origin + path + (parsed.search || '');
+        return parsed.origin + '/' + parts.join('/');
     } catch (e) {
-        var normalized = rawUrl.split('#')[0];
-        if (normalized.length > 1 && normalized[normalized.length - 1] === '/') {
-            normalized = normalized.slice(0, -1);
+        var normalized = rawUrl.split('#')[0].split('?')[0];
+        var arr = normalized.split('/');
+        if (arr.length > 0 && arr[arr.length - 1] === '') {
+            arr.pop();
         }
-        return normalized;
+        if (arr.length > 0) {
+            arr.pop();
+        }
+        return arr.join('/');
     }
 }
 
@@ -140,9 +154,9 @@ function normalizeBookmarkRecord(input) {
     if (!Number.isFinite(curprog)) {
         curprog = 0;
     }
-    var cururlKey = getUrlIdentityKey(cururl);
+    var cururlKey = getBookIdentityKey(cururl);
     return {
-        id: 'url::' + cururlKey,
+        id: 'book::' + cururlKey,
         cururlKey: cururlKey,
         rTitle: (input && input.rTitle) || '',
         cururl: cururl,
@@ -150,6 +164,94 @@ function normalizeBookmarkRecord(input) {
         bookuniqueid: (input && typeof input.bookuniqueid === 'string') ? input.bookuniqueid.trim() : '',
         updatedAt: Date.now()
     };
+}
+
+function normalizeUniqueId(raw) {
+    if (typeof raw !== 'string') {
+        return '';
+    }
+    return raw.trim();
+}
+
+function buildReadingTimeId(cururlKey) {
+    return 'time::' + cururlKey;
+}
+
+function normalizeReadingTimeRecord(input) {
+    var cururl = (input && input.cururl) || '';
+    var cururlKey = getBookIdentityKey(cururl);
+    var uniqueid = normalizeUniqueId(input && (input.bookuniqueid || input.uniqueid));
+    return {
+        id: buildReadingTimeId(cururlKey),
+        schemaVersion: READING_TIME_SCHEMA_VERSION,
+        cururl: cururl,
+        cururlKey: cururlKey,
+        rTitle: (input && input.rTitle) || '',
+        uniqueid: uniqueid,
+        bookuniqueid: uniqueid,
+        totalReadingMs: 0,
+        totalReadingSec: 0,
+        sessionCount: 0,
+        firstReadAt: 0,
+        lastReadAt: 0,
+        updatedAt: Date.now(),
+        lastMergeSource: ''
+    };
+}
+
+function mergeReadingTimeRecord(existing, incoming, nowTs, source, options) {
+    var opts = options || {};
+    var shouldAccumulateTime = opts.accumulateTime !== false;
+    var next = existing ? Object.assign({}, existing) : normalizeReadingTimeRecord(incoming);
+    var deltaMs = 0;
+    var prevTouch = Number(next.lastReadAt || next.updatedAt || 0);
+    if (shouldAccumulateTime) {
+        if (prevTouch > 0) {
+            var gap = nowTs - prevTouch;
+            if (gap > 0 && gap <= READING_TIME_MAX_GAP_MS) {
+                deltaMs = gap;
+            }
+            if (gap > READING_TIME_MAX_GAP_MS) {
+                next.sessionCount = Number(next.sessionCount || 0) + 1;
+            }
+        } else {
+            next.sessionCount = Number(next.sessionCount || 0) + 1;
+            next.firstReadAt = nowTs;
+        }
+    } else if (!next.firstReadAt) {
+        next.firstReadAt = nowTs;
+    }
+
+    if (!next.firstReadAt) {
+        next.firstReadAt = nowTs;
+    }
+
+    var incomingUniqueId = normalizeUniqueId(incoming && (incoming.bookuniqueid || incoming.uniqueid));
+    if (incomingUniqueId) {
+        next.uniqueid = incomingUniqueId;
+        next.bookuniqueid = incomingUniqueId;
+    } else {
+        var keptUnique = normalizeUniqueId(next.uniqueid || next.bookuniqueid);
+        next.uniqueid = keptUnique;
+        next.bookuniqueid = keptUnique;
+    }
+
+    if (incoming && incoming.cururl) {
+        next.cururl = incoming.cururl;
+        next.cururlKey = getBookIdentityKey(incoming.cururl);
+        next.id = buildReadingTimeId(next.cururlKey);
+    }
+    if (incoming && incoming.rTitle) {
+        next.rTitle = incoming.rTitle;
+    }
+
+    next.totalReadingMs = Number(next.totalReadingMs || 0) + deltaMs;
+    next.totalReadingSec = Math.floor(next.totalReadingMs / 1000);
+    next.lastReadAt = nowTs;
+    next.updatedAt = nowTs;
+    next.lastMergeSource = source || 'updatebk';
+    next.schemaVersion = READING_TIME_SCHEMA_VERSION;
+    return next;
 }
 
 async function upsertBookmarkRecord(input) {
@@ -170,7 +272,7 @@ async function upsertBookmarkRecord(input) {
             if (!row) {
                 continue;
             }
-            var rowUrlKey = row.cururlKey || getUrlIdentityKey(row.cururl || '');
+            var rowUrlKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
             if (rowUrlKey === record.cururlKey) {
                 existing = row;
                 break;
@@ -186,6 +288,267 @@ async function upsertBookmarkRecord(input) {
         }
         await txRequestToPromise(store.put(record));
         return { ok: true, record: record };
+    } finally {
+        db.close();
+    }
+}
+
+async function mergeReadingTimeByBookmark(input, source) {
+    var base = normalizeBookmarkRecord(input);
+    if (!base.cururlKey) {
+        return { ok: false, error: 'invalid_cururl' };
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var recId = buildReadingTimeId(base.cururlKey);
+        var existing = await txRequestToPromise(store.get(recId));
+        if (!existing) {
+            var rows = await txRequestToPromise(store.getAll());
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (!row) {
+                    continue;
+                }
+                var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
+                if (rowKey === base.cururlKey) {
+                    existing = row;
+                    break;
+                }
+            }
+        }
+        var merged = mergeReadingTimeRecord(existing, {
+            cururl: base.cururl,
+            rTitle: base.rTitle,
+            bookuniqueid: base.bookuniqueid
+        }, Date.now(), source || 'updatebk');
+        await txRequestToPromise(store.put(merged));
+        return { ok: true, record: merged };
+    } finally {
+        db.close();
+    }
+}
+
+async function listReadingTimeRecords() {
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readonly');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var all = await txRequestToPromise(store.getAll());
+        all.sort(function (a, b) {
+            return (b.updatedAt || 0) - (a.updatedAt || 0);
+        });
+        return all;
+    } finally {
+        db.close();
+    }
+}
+
+async function syncReadingTimeUniqueIdByBookmarkId(bookmarkId, bookuniqueid) {
+    if (!bookmarkId || bookmarkId.indexOf('::') <= 0) {
+        return { ok: false, error: 'invalid_bookmark_id' };
+    }
+    var cururlKey = bookmarkId.slice(bookmarkId.indexOf('::') + 2);
+    if (!cururlKey) {
+        return { ok: false, error: 'invalid_cururl_key' };
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var recId = buildReadingTimeId(cururlKey);
+        var existing = await txRequestToPromise(store.get(recId));
+        if (!existing) {
+            var rows = await txRequestToPromise(store.getAll());
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (!row) {
+                    continue;
+                }
+                var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
+                if (rowKey === cururlKey) {
+                    existing = row;
+                    break;
+                }
+            }
+        }
+        if (!existing) {
+            return { ok: true, skipped: true };
+        }
+        var merged = mergeReadingTimeRecord(existing, {
+            cururl: existing.cururl,
+            rTitle: existing.rTitle,
+            bookuniqueid: normalizeUniqueId(bookuniqueid)
+        }, Date.now(), 'bookmark_uniqueid_sync', { accumulateTime: false });
+        await txRequestToPromise(store.put(merged));
+        return { ok: true, record: merged };
+    } finally {
+        db.close();
+    }
+}
+
+async function compactBookmarkStoreByBook() {
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_STACK_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_STACK_STORE);
+        var rows = await txRequestToPromise(store.getAll());
+        var grouped = {};
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (!row || !row.cururl) {
+                continue;
+            }
+            var key = getBookIdentityKey(row.cururl);
+            if (!key) {
+                continue;
+            }
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(row);
+        }
+
+        var keys = Object.keys(grouped);
+        for (var g = 0; g < keys.length; g++) {
+            var bookKey = keys[g];
+            var list = grouped[bookKey];
+            if (!list || list.length === 0) {
+                continue;
+            }
+
+            list.sort(function (a, b) {
+                return (b.updatedAt || 0) - (a.updatedAt || 0);
+            });
+
+            var latest = list[0];
+            var pickedUniqueId = '';
+            for (var u = 0; u < list.length; u++) {
+                var cand = normalizeUniqueId(list[u].bookuniqueid);
+                if (cand) {
+                    pickedUniqueId = cand;
+                    break;
+                }
+            }
+
+            var merged = {
+                id: 'book::' + bookKey,
+                cururlKey: bookKey,
+                rTitle: latest.rTitle || '',
+                cururl: latest.cururl || '',
+                curprog: Number.isFinite(Number(latest.curprog)) ? Number(latest.curprog) : 0,
+                bookuniqueid: pickedUniqueId,
+                updatedAt: latest.updatedAt || Date.now()
+            };
+
+            await txRequestToPromise(store.put(merged));
+            for (var d = 0; d < list.length; d++) {
+                var rec = list[d];
+                if (!rec || rec.id === merged.id) {
+                    continue;
+                }
+                await txRequestToPromise(store.delete(rec.id));
+            }
+        }
+    } finally {
+        db.close();
+    }
+}
+
+async function compactReadingTimeStoreByBook() {
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var rows = await txRequestToPromise(store.getAll());
+        var grouped = {};
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (!row || !row.cururl) {
+                continue;
+            }
+            var key = getBookIdentityKey(row.cururl);
+            if (!key) {
+                continue;
+            }
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(row);
+        }
+
+        var keys = Object.keys(grouped);
+        for (var g = 0; g < keys.length; g++) {
+            var bookKey = keys[g];
+            var list = grouped[bookKey];
+            if (!list || list.length === 0) {
+                continue;
+            }
+
+            list.sort(function (a, b) {
+                return (b.updatedAt || 0) - (a.updatedAt || 0);
+            });
+
+            var latest = list[0];
+            var totalMs = 0;
+            var firstReadAt = 0;
+            var lastReadAt = 0;
+            var sessionCount = 0;
+            var pickedUniqueId = '';
+
+            for (var m = 0; m < list.length; m++) {
+                var rec = list[m];
+                var ms = Number(rec.totalReadingMs || 0);
+                if (Number.isFinite(ms) && ms > 0) {
+                    totalMs += ms;
+                }
+                var sCnt = Number(rec.sessionCount || 0);
+                if (Number.isFinite(sCnt) && sCnt > 0) {
+                    sessionCount += sCnt;
+                }
+                var fr = Number(rec.firstReadAt || 0);
+                if (fr > 0) {
+                    firstReadAt = firstReadAt > 0 ? Math.min(firstReadAt, fr) : fr;
+                }
+                var lr = Number(rec.lastReadAt || 0);
+                if (lr > 0) {
+                    lastReadAt = Math.max(lastReadAt, lr);
+                }
+                var uid = normalizeUniqueId(rec.uniqueid || rec.bookuniqueid);
+                if (!pickedUniqueId && uid) {
+                    pickedUniqueId = uid;
+                }
+            }
+
+            var merged = {
+                id: buildReadingTimeId(bookKey),
+                schemaVersion: READING_TIME_SCHEMA_VERSION,
+                cururl: latest.cururl || '',
+                cururlKey: bookKey,
+                rTitle: latest.rTitle || '',
+                uniqueid: pickedUniqueId,
+                bookuniqueid: pickedUniqueId,
+                totalReadingMs: totalMs,
+                totalReadingSec: Math.floor(totalMs / 1000),
+                sessionCount: sessionCount,
+                firstReadAt: firstReadAt,
+                lastReadAt: lastReadAt || (latest.updatedAt || Date.now()),
+                updatedAt: latest.updatedAt || Date.now(),
+                lastMergeSource: 'compact_by_book'
+            };
+
+            await txRequestToPromise(store.put(merged));
+            for (var d = 0; d < list.length; d++) {
+                var old = list[d];
+                if (!old || old.id === merged.id) {
+                    continue;
+                }
+                await txRequestToPromise(store.delete(old.id));
+            }
+        }
     } finally {
         db.close();
     }
@@ -225,6 +588,7 @@ async function updateBookmarkUniqueId(bookmarkId, bookuniqueid) {
     if (!bookmarkId) {
         return { ok: false, error: 'missing_bookmark_id' };
     }
+    var updatedRecord = null;
     var db = await openRabbookDb();
     try {
         var tx = db.transaction(RABBOOK_STACK_STORE, 'readwrite');
@@ -236,10 +600,16 @@ async function updateBookmarkUniqueId(bookmarkId, bookuniqueid) {
         existing.bookuniqueid = (typeof bookuniqueid === 'string' ? bookuniqueid.trim() : '');
         existing.updatedAt = Date.now();
         await txRequestToPromise(store.put(existing));
-        return { ok: true, record: existing };
+        updatedRecord = existing;
     } finally {
         db.close();
     }
+
+    if (updatedRecord) {
+        await syncReadingTimeUniqueIdByBookmarkId(bookmarkId, updatedRecord.bookuniqueid);
+        return { ok: true, record: updatedRecord };
+    }
+    return { ok: false, error: 'bookmark_update_failed' };
 }
 
 function notifyDetailsRefresh() {
@@ -299,8 +669,10 @@ function initConfigAndListener() {
         */
         configReady = true;
         migrateLegacyBookmarksIfNeeded().finally(function () {
+            Promise.allSettled([compactBookmarkStoreByBook(), compactReadingTimeStoreByBook()]).finally(function () {
             // 处理队列中等待的连接
-            flushPendingConnections();
+                flushPendingConnections();
+            });
         });
     });
 }
@@ -500,6 +872,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         return true;
     }
 
+    if (msg.type === 'readingTimeGetAll') {
+        listReadingTimeRecords().then(function (rows) {
+            sendResponse({ ok: true, readingTime: rows });
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'readingtime_get_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
     return false;
 });
 
@@ -606,13 +987,18 @@ function handlePort(port) {
                 });
             };
             if (msg.type == "updatebk") {
-                upsertBookmarkRecord(msg).then(function (ret) {
-                    if (ret.ok) {
+                Promise.all([upsertBookmarkRecord(msg), mergeReadingTimeByBookmark(msg, 'updatebk')]).then(function (rets) {
+                    var bkRet = rets[0];
+                    var tmRet = rets[1];
+                    if (bkRet && bkRet.ok) {
                         console.info("Bookmarks Updated Done (IndexedDB)");
                         notifyDetailsRefresh();
-                        return;
+                    } else {
+                        console.warn('updatebk failed:', bkRet && bkRet.error ? bkRet.error : 'unknown');
                     }
-                    console.warn('updatebk failed:', ret.error || 'unknown');
+                    if (!tmRet || !tmRet.ok) {
+                        console.warn('reading time merge failed:', tmRet && tmRet.error ? tmRet.error : 'unknown');
+                    }
                 }).catch(function (err) {
                     console.error('updatebk exception:', err && err.message ? err.message : err);
                 });
