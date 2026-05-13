@@ -184,6 +184,18 @@ function getDateKeyFromTs(ts) {
     return year + '-' + (month < 10 ? '0' + month : '' + month) + '-' + (day < 10 ? '0' + day : '' + day);
 }
 
+function getHourKeyFromTs(ts) {
+    var date = new Date(Number(ts || 0));
+    if (isNaN(date.getTime())) {
+        return '';
+    }
+    var year = date.getFullYear();
+    var month = date.getMonth() + 1;
+    var day = date.getDate();
+    var hour = date.getHours();
+    return year + '-' + (month < 10 ? '0' + month : '' + month) + '-' + (day < 10 ? '0' + day : '' + day) + ' ' + (hour < 10 ? '0' + hour : '' + hour);
+}
+
 function cloneDailyDurations(dailyDurations) {
     var next = {};
     if (!dailyDurations || typeof dailyDurations !== 'object') {
@@ -217,6 +229,97 @@ function mergeDailyDurations(target, source) {
     return next;
 }
 
+function cloneHourlyDurations(hourlyDurations) {
+    var next = {};
+    if (!hourlyDurations || typeof hourlyDurations !== 'object') {
+        return next;
+    }
+    var keys = Object.keys(hourlyDurations);
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var value = Number(hourlyDurations[key] || 0);
+        if (Number.isFinite(value) && value > 0) {
+            next[key] = value;
+        }
+    }
+    return next;
+}
+
+function mergeHourlyDurations(target, source) {
+    var next = cloneHourlyDurations(target);
+    if (!source || typeof source !== 'object') {
+        return next;
+    }
+    var keys = Object.keys(source);
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var value = Number(source[key] || 0);
+        if (!Number.isFinite(value) || value <= 0) {
+            continue;
+        }
+        next[key] = Number(next[key] || 0) + value;
+    }
+    return next;
+}
+
+function normalizeReadingEntry(input) {
+    var item = input || {};
+    var text = String(item.text || '').trim();
+    if (!text) {
+        return null;
+    }
+    var note = String(item.note || '').trim();
+    var chapter = String(item.chapter || '').trim();
+    var time = Number(item.time || 0);
+    if (!Number.isFinite(time) || time <= 0) {
+        time = Math.floor(Date.now() / 1000);
+    }
+    if (time > 1000000000000) {
+        time = Math.floor(time / 1000);
+    }
+    return {
+        text: text,
+        note: note,
+        chapter: chapter,
+        time: Math.floor(time)
+    };
+}
+
+function cloneReadingEntries(entries) {
+    var next = [];
+    if (!Array.isArray(entries)) {
+        return next;
+    }
+    for (var i = 0; i < entries.length; i++) {
+        var normalized = normalizeReadingEntry(entries[i]);
+        if (normalized) {
+            next.push(normalized);
+        }
+    }
+    return next;
+}
+
+function mergeReadingEntries(target, source) {
+    var merged = cloneReadingEntries(target);
+    var seen = {};
+    for (var i = 0; i < merged.length; i++) {
+        var it = merged[i];
+        var sig = [it.text, it.note, it.chapter, it.time].join('||');
+        seen[sig] = true;
+    }
+    var list = cloneReadingEntries(source);
+    for (var j = 0; j < list.length; j++) {
+        var row = list[j];
+        var key = [row.text, row.note, row.chapter, row.time].join('||');
+        if (seen[key]) {
+            continue;
+        }
+        seen[key] = true;
+        merged.push(row);
+    }
+    return merged;
+}
+
 function buildReadingTimeId(cururlKey) {
     return 'time::' + cururlKey;
 }
@@ -237,6 +340,8 @@ function normalizeReadingTimeRecord(input) {
         totalReadingSec: 0,
         sessionCount: 0,
         dailyDurations: {},
+        hourlyDurations: {},
+        entries: [],
         firstReadAt: 0,
         lastReadAt: 0,
         updatedAt: Date.now(),
@@ -301,14 +406,139 @@ function mergeReadingTimeRecord(existing, incoming, nowTs, source, options) {
                 return obj;
             })());
         }
+        var hourKey = getHourKeyFromTs(nowTs);
+        if (hourKey) {
+            next.hourlyDurations = mergeHourlyDurations(next.hourlyDurations, (function () {
+                var obj = {};
+                obj[hourKey] = deltaMs;
+                return obj;
+            })());
+        }
     } else {
         next.dailyDurations = cloneDailyDurations(next.dailyDurations);
+        next.hourlyDurations = cloneHourlyDurations(next.hourlyDurations);
     }
+    next.entries = cloneReadingEntries(next.entries);
     next.lastReadAt = nowTs;
     next.updatedAt = nowTs;
     next.lastMergeSource = source || 'updatebk';
     next.schemaVersion = READING_TIME_SCHEMA_VERSION;
     return next;
+}
+
+async function getBookmarkByCururlKey(cururlKey) {
+    var key = String(cururlKey || '').trim();
+    if (!key) {
+        return null;
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_STACK_STORE, 'readonly');
+        var store = tx.objectStore(RABBOOK_STACK_STORE);
+        var directId = 'book::' + key;
+        var direct = await txRequestToPromise(store.get(directId));
+        if (direct) {
+            return direct;
+        }
+        var rows = await txRequestToPromise(store.getAll());
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (!row) {
+                continue;
+            }
+            var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
+            if (rowKey === key) {
+                return row;
+            }
+        }
+        return null;
+    } finally {
+        db.close();
+    }
+}
+
+async function ensureBookmarkUniqueIdByInput(input) {
+    var raw = input || {};
+    var key = String(raw.cururlKey || getBookIdentityKey(raw.cururl || '') || '').trim();
+    var uid = normalizeUniqueId(raw.bookuniqueid);
+    if (!key) {
+        return { ok: false, error: 'missing_cururl_key' };
+    }
+
+    var existing = await getBookmarkByCururlKey(key);
+    if (!existing) {
+        var cururl = String(raw.cururl || '').trim();
+        if (!cururl) {
+            return { ok: false, error: 'bookmark_not_found_and_missing_cururl' };
+        }
+        await upsertBookmarkRecord({
+            cururl: cururl,
+            rTitle: String(raw.rTitle || ''),
+            curprog: Number(raw.curprog || 0),
+            bookuniqueid: uid
+        });
+        var created = await getBookmarkByCururlKey(key);
+        return { ok: !!created, record: created || null };
+    }
+
+    if (uid) {
+        var updated = await updateBookmarkUniqueId(existing.id, uid);
+        if (!updated || !updated.ok) {
+            return updated || { ok: false, error: 'bookmark_set_uniqueid_failed' };
+        }
+        existing = updated.record || existing;
+    }
+    return { ok: true, record: existing };
+}
+
+async function appendReadingEntryByBookmark(input, entryInput) {
+    var base = normalizeBookmarkRecord(input);
+    if (!base.cururlKey) {
+        return { ok: false, error: 'invalid_cururl' };
+    }
+    var normalizedEntry = normalizeReadingEntry(entryInput);
+    if (!normalizedEntry) {
+        return { ok: false, error: 'invalid_entry_text' };
+    }
+    var uid = normalizeUniqueId(input && (input.bookuniqueid || input.uniqueid));
+    if (!uid) {
+        return { ok: false, error: 'missing_uniqueid' };
+    }
+
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var recId = buildReadingTimeId(base.cururlKey);
+        var existing = await txRequestToPromise(store.get(recId));
+        if (!existing) {
+            var rows = await txRequestToPromise(store.getAll());
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (!row) {
+                    continue;
+                }
+                var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
+                if (rowKey === base.cururlKey) {
+                    existing = row;
+                    break;
+                }
+            }
+        }
+        var merged = mergeReadingTimeRecord(existing, {
+            cururl: base.cururl,
+            rTitle: base.rTitle,
+            bookuniqueid: uid
+        }, Date.now(), 'reading_entry_add', { accumulateTime: false });
+        merged.entries = mergeReadingEntries(merged.entries, [normalizedEntry]);
+        merged.uniqueid = uid;
+        merged.bookuniqueid = uid;
+        merged.lastMergeSource = 'reading_entry_add';
+        await txRequestToPromise(store.put(merged));
+        return { ok: true, record: merged };
+    } finally {
+        db.close();
+    }
 }
 
 async function upsertBookmarkRecord(input) {
@@ -397,6 +627,171 @@ async function listReadingTimeRecords() {
             return (b.updatedAt || 0) - (a.updatedAt || 0);
         });
         return all;
+    } finally {
+        db.close();
+    }
+}
+
+function normalizeEntryCompareText(value) {
+    return String(value || '').trim();
+}
+
+function isSameReadingEntry(candidate, expectedText, expectedChapter, expectedTime) {
+    if (!candidate) {
+        return false;
+    }
+    if (normalizeEntryCompareText(candidate.text) !== normalizeEntryCompareText(expectedText)) {
+        return false;
+    }
+    if (normalizeEntryCompareText(candidate.chapter) !== normalizeEntryCompareText(expectedChapter)) {
+        return false;
+    }
+    if (expectedTime === null || expectedTime === undefined || expectedTime === '') {
+        return true;
+    }
+    return Number(candidate.time || 0) === Number(expectedTime || 0);
+}
+
+async function findReadingRecordByMessage(store, msg) {
+    var cururlKey = String((msg && msg.cururlKey) || '').trim();
+    var bookmarkId = String((msg && msg.bookmarkId) || '').trim();
+
+    if (!cururlKey && bookmarkId.indexOf('book::') === 0) {
+        cururlKey = bookmarkId.slice('book::'.length);
+    }
+
+    if (cururlKey) {
+        var byId = await txRequestToPromise(store.get(buildReadingTimeId(cururlKey)));
+        if (byId) {
+            return byId;
+        }
+    }
+
+    var rows = await txRequestToPromise(store.getAll());
+    if (cururlKey) {
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (!row) {
+                continue;
+            }
+            var rowKey = String(row.cururlKey || getBookIdentityKey(row.cururl || '') || '').trim();
+            if (rowKey && rowKey === cururlKey) {
+                return row;
+            }
+        }
+    }
+
+    var expectedText = msg && msg.entryText;
+    var expectedChapter = msg && msg.entryChapter;
+    var expectedTime = msg && msg.entryTime;
+    for (var j = 0; j < rows.length; j++) {
+        var rec = rows[j];
+        if (!rec) {
+            continue;
+        }
+        var entries = Array.isArray(rec.entries) ? rec.entries : [];
+        for (var k = 0; k < entries.length; k++) {
+            if (isSameReadingEntry(entries[k], expectedText, expectedChapter, expectedTime)) {
+                return rec;
+            }
+        }
+    }
+
+    return null;
+}
+
+async function deleteReadingEntryByMessage(msg) {
+    var entryText = String(msg && msg.entryText || '').trim();
+    var entryChapter = String(msg && msg.entryChapter || '').trim();
+    var entryTime = msg && msg.entryTime;
+    if (!entryText) {
+        return { ok: false, error: 'missing_entry_info' };
+    }
+
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var rec = await findReadingRecordByMessage(store, msg);
+        if (!rec) {
+            return { ok: false, error: 'record_not_found' };
+        }
+
+        var entries = Array.isArray(rec.entries) ? rec.entries : [];
+        var deleted = false;
+        var nextEntries = [];
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            if (!deleted && isSameReadingEntry(e, entryText, entryChapter, entryTime)) {
+                deleted = true;
+                continue;
+            }
+            nextEntries.push(e);
+        }
+        if (!deleted) {
+            return { ok: false, error: 'entry_not_found' };
+        }
+
+        rec.entries = nextEntries;
+        await txRequestToPromise(store.put(rec));
+        try {
+            notifyDetailsRefresh();
+        } catch (e) {}
+        return { ok: true };
+    } catch (err) {
+        return {
+            ok: false,
+            error: 'delete_failed',
+            message: err && err.message ? err.message : String(err)
+        };
+    } finally {
+        db.close();
+    }
+}
+
+async function updateReadingEntryByMessage(msg) {
+    var entryText = String(msg && msg.entryText || '').trim();
+    var entryChapter = String(msg && msg.entryChapter || '').trim();
+    var entryTime = msg && msg.entryTime;
+    var newNote = String(msg && msg.newNote || '').trim();
+    if (!entryText) {
+        return { ok: false, error: 'missing_entry_info' };
+    }
+
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction(RABBOOK_TIME_STORE, 'readwrite');
+        var store = tx.objectStore(RABBOOK_TIME_STORE);
+        var rec = await findReadingRecordByMessage(store, msg);
+        if (!rec) {
+            return { ok: false, error: 'record_not_found' };
+        }
+
+        var entries = Array.isArray(rec.entries) ? rec.entries : [];
+        var updated = false;
+        for (var i = 0; i < entries.length; i++) {
+            if (isSameReadingEntry(entries[i], entryText, entryChapter, entryTime)) {
+                entries[i].note = newNote;
+                updated = true;
+                break;
+            }
+        }
+        if (!updated) {
+            return { ok: false, error: 'entry_not_found' };
+        }
+
+        rec.entries = entries;
+        await txRequestToPromise(store.put(rec));
+        try {
+            notifyDetailsRefresh();
+        } catch (e) {}
+        return { ok: true };
+    } catch (err) {
+        return {
+            ok: false,
+            error: 'update_failed',
+            message: err && err.message ? err.message : String(err)
+        };
     } finally {
         db.close();
     }
@@ -636,6 +1031,8 @@ async function compactReadingTimeStoreByBook() {
             var lastReadAt = 0;
             var sessionCount = 0;
             var dailyDurations = {};
+            var hourlyDurations = {};
+            var mergedEntries = [];
             var pickedUniqueId = '';
 
             for (var m = 0; m < list.length; m++) {
@@ -661,6 +1058,8 @@ async function compactReadingTimeStoreByBook() {
                     pickedUniqueId = uid;
                 }
                 dailyDurations = mergeDailyDurations(dailyDurations, rec.dailyDurations || {});
+                hourlyDurations = mergeHourlyDurations(hourlyDurations, rec.hourlyDurations || {});
+                mergedEntries = mergeReadingEntries(mergedEntries, rec.entries || []);
             }
 
             var merged = {
@@ -675,6 +1074,8 @@ async function compactReadingTimeStoreByBook() {
                 totalReadingSec: Math.floor(totalMs / 1000),
                 sessionCount: sessionCount,
                 dailyDurations: dailyDurations,
+                hourlyDurations: hourlyDurations,
+                entries: mergedEntries,
                 firstReadAt: firstReadAt,
                 lastReadAt: lastReadAt || (latest.updatedAt || Date.now()),
                 updatedAt: latest.updatedAt || Date.now(),
@@ -710,10 +1111,63 @@ async function listBookmarkRecords() {
     }
 }
 
+async function exportBookData(bookmarkId) {
+    if (!bookmarkId) {
+        return { ok: false, error: 'missing_bookmark_id' };
+    }
+    var db = await openRabbookDb();
+    try {
+        var tx = db.transaction([RABBOOK_STACK_STORE, RABBOOK_TIME_STORE], 'readonly');
+        var stackStore = tx.objectStore(RABBOOK_STACK_STORE);
+        var timeStore = tx.objectStore(RABBOOK_TIME_STORE);
+        
+        var bookmark = await txRequestToPromise(stackStore.get(bookmarkId));
+        if (!bookmark) {
+            return { ok: false, error: 'bookmark_not_found' };
+        }
+        
+        var cururlKey = bookmark.cururlKey || getBookIdentityKey(bookmark.cururl || '');
+        if (!cururlKey && bookmarkId.indexOf('book::') === 0) {
+            cururlKey = bookmarkId.slice('book::'.length);
+        }
+        
+        var readingRecords = [];
+        if (cururlKey) {
+            var mainReadingId = buildReadingTimeId(cururlKey);
+            var mainRecord = await txRequestToPromise(timeStore.get(mainReadingId));
+            if (mainRecord) {
+                readingRecords.push(mainRecord);
+            }
+            
+            var allRecords = await txRequestToPromise(timeStore.getAll());
+            for (var i = 0; i < allRecords.length; i++) {
+                var record = allRecords[i];
+                if (!record || record.id === mainReadingId) {
+                    continue;
+                }
+                var recordKey = record.cururlKey || getBookIdentityKey(record.cururl || '');
+                if (recordKey === cururlKey) {
+                    readingRecords.push(record);
+                }
+            }
+        }
+        
+        return {
+            ok: true,
+            bookmark: bookmark,
+            readingRecords: readingRecords
+        };
+    } finally {
+        db.close();
+    }
+}
+
 async function deleteBookmarkById(bookmarkId) {
     if (!bookmarkId) {
         return { ok: false, error: 'missing_bookmark_id' };
     }
+    var readingRecordDeleted = 0;
+    var entryDeletedCount = 0;
     var db = await openRabbookDb();
     try {
         var tx = db.transaction([RABBOOK_STACK_STORE, RABBOOK_TIME_STORE], 'readwrite');
@@ -731,7 +1185,13 @@ async function deleteBookmarkById(bookmarkId) {
         }
 
         if (cururlKey) {
-            await txRequestToPromise(timeStore.delete(buildReadingTimeId(cururlKey)));
+            var mainReadingId = buildReadingTimeId(cururlKey);
+            var mainRecord = await txRequestToPromise(timeStore.get(mainReadingId));
+            if (mainRecord) {
+                readingRecordDeleted += 1;
+                entryDeletedCount += Array.isArray(mainRecord.entries) ? mainRecord.entries.length : 0;
+            }
+            await txRequestToPromise(timeStore.delete(mainReadingId));
 
             // 兼容旧数据：若历史记录 id 未按 time::cururlKey 生成，则按 cururlKey 再扫一遍清理。
             var rows = await txRequestToPromise(timeStore.getAll());
@@ -742,11 +1202,15 @@ async function deleteBookmarkById(bookmarkId) {
                 }
                 var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
                 if (rowKey === cururlKey) {
+                    if (row.id !== mainReadingId) {
+                        readingRecordDeleted += 1;
+                        entryDeletedCount += Array.isArray(row.entries) ? row.entries.length : 0;
+                    }
                     await txRequestToPromise(timeStore.delete(row.id));
                 }
             }
         }
-        return { ok: true };
+        return { ok: true, readingRecordDeleted: readingRecordDeleted, entryDeletedCount: entryDeletedCount };
     } finally {
         db.close();
     }
@@ -927,23 +1391,41 @@ function normalizeXmnoteEndpoint(rawEndpoint) {
 function normalizeXmnoteImportRecord(rec) {
     var row = rec || {};
     var uniqueid = normalizeUniqueId(row.uniqueid || row.bookuniqueid);
-    var daily = row.dailyDurations && typeof row.dailyDurations === 'object' ? row.dailyDurations : {};
-    var dateKeys = Object.keys(daily);
+    var hourly = row.hourlyDurations && typeof row.hourlyDurations === 'object' ? row.hourlyDurations : {};
+    var hourKeys = Object.keys(hourly);
     var fuzzy = [];
-    for (var i = 0; i < dateKeys.length; i++) {
-        var dateKey = dateKeys[i];
-        var seconds = Math.floor(Number(daily[dateKey] || 0) / 1000);
+    for (var i = 0; i < hourKeys.length; i++) {
+        var hourKey = hourKeys[i];
+        var seconds = Math.floor(Number(hourly[hourKey] || 0) / 1000);
         if (!Number.isFinite(seconds) || seconds <= 0) {
             continue;
         }
-        var dayTs = Math.floor(new Date(dateKey + 'T00:00:00').getTime() / 1000);
-        if (!Number.isFinite(dayTs) || dayTs <= 0) {
+        var hourTs = Math.floor(new Date(hourKey.replace(' ', 'T') + ':00:00').getTime() / 1000);
+        if (!Number.isFinite(hourTs) || hourTs <= 0) {
             continue;
         }
         fuzzy.push({
-            date: dayTs,
+            date: hourTs,
             durationSeconds: seconds
         });
+    }
+
+    // 兼容旧数据：无小时桶时回落到天桶（按每天 00:00 作为时间点）。
+    if (fuzzy.length === 0) {
+        var daily = row.dailyDurations && typeof row.dailyDurations === 'object' ? row.dailyDurations : {};
+        var dateKeys = Object.keys(daily);
+        for (var d = 0; d < dateKeys.length; d++) {
+            var dateKey = dateKeys[d];
+            var daySeconds = Math.floor(Number(daily[dateKey] || 0) / 1000);
+            if (!Number.isFinite(daySeconds) || daySeconds <= 0) {
+                continue;
+            }
+            var dayTs = Math.floor(new Date(dateKey + 'T00:00:00').getTime() / 1000);
+            if (!Number.isFinite(dayTs) || dayTs <= 0) {
+                continue;
+            }
+            fuzzy.push({ date: dayTs, durationSeconds: daySeconds });
+        }
     }
     fuzzy.sort(function (a, b) { return a.date - b.date; });
 
@@ -954,6 +1436,14 @@ function normalizeXmnoteImportRecord(rec) {
     }
 
     var lastReadAtSec = Math.floor(Number(row.lastReadAt || row.updatedAt || Date.now()) / 1000);
+    var rangeNote = '';
+    if (fuzzy.length > 0) {
+        var firstBucket = fuzzy[0];
+        var lastBucket = fuzzy[fuzzy.length - 1];
+        var rangeStart = new Date(firstBucket.date * 1000).toISOString();
+        var rangeEnd = new Date((lastBucket.date + 3600) * 1000).toISOString();
+        rangeNote = '\n小时范围: ' + rangeStart + ' ~ ' + rangeEnd;
+    }
     return {
         uniqueid: uniqueid,
         title: String(row.title || row.rTitle || ''),
@@ -970,7 +1460,7 @@ function normalizeXmnoteImportRecord(rec) {
             {
                 chapter: '阅读时间同步',
                 text: '阅读时间导入（uniqueid=' + uniqueid + '）',
-                note: '来源: LeanRabbook\nURL: ' + String(row.cururl || ''),
+                note: '来源: LeanRabbook\nURL: ' + String(row.cururl || '') + rangeNote,
                 time: lastReadAtSec
             }
         ]
@@ -1228,6 +1718,27 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         return true;
     }
 
+    if (msg.type === 'bookmarkGetByCururlKey') {
+        getBookmarkByCururlKey(msg.cururlKey).then(function (record) {
+            sendResponse({ ok: true, record: record || null });
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'bookmark_get_by_key_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'bookmarkEnsureUniqueId') {
+        ensureBookmarkUniqueIdByInput(msg).then(function (ret) {
+            if (ret && ret.ok) {
+                notifyDetailsRefresh();
+            }
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'bookmark_ensure_uniqueid_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
     if (msg.type === 'readingTimeGetAll') {
         listReadingTimeRecords().then(function (rows) {
             sendResponse({ ok: true, readingTime: rows });
@@ -1249,11 +1760,67 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         return true;
     }
 
+    if (msg.type === 'readingEntryAdd') {
+        appendReadingEntryByBookmark(msg, msg.entry).then(function (ret) {
+            if (ret && ret.ok) {
+                notifyDetailsRefresh();
+            }
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'reading_entry_add_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
     if (msg.type === 'xmnoteImportReadingTime') {
         importReadingTimeToXmnote(msg.endpoint, msg.records).then(function (ret) {
             sendResponse(ret);
         }).catch(function (err) {
             sendResponse({ ok: false, error: 'xmnote_import_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'readingEntriesGetAll') {
+        listReadingTimeRecords().then(function (rows) {
+            var allEntries = [];
+            rows.forEach(function (row) {
+                var normalizedUniqueId = normalizeUniqueId((row && (row.bookuniqueid || row.uniqueid)) || '');
+                var entries = Array.isArray(row.entries) ? row.entries : [];
+                entries.forEach(function (entry) {
+                    allEntries.push({
+                        bookmarkId: row.bookmarkId,
+                        uniqueid: normalizedUniqueId,
+                        rTitle: row.rTitle,
+                        cururlKey: row.cururlKey,
+                        text: entry.text,
+                        note: entry.note,
+                        chapter: entry.chapter,
+                        time: entry.time
+                    });
+                });
+            });
+            sendResponse({ ok: true, entries: allEntries });
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'reading_entries_get_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'readingEntryDelete') {
+        deleteReadingEntryByMessage(msg).then(function (ret) {
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'delete_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'readingEntryUpdate') {
+        updateReadingEntryByMessage(msg).then(function (ret) {
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'update_failed', message: err && err.message ? err.message : String(err) });
         });
         return true;
     }
@@ -1365,8 +1932,8 @@ function handlePort(port) {
                 });
             };
             if (msg.type == "updatebk") {
-                // To update bookmark in serviced worker
-                bklist = config.bookmarks;
+                // 主链路写入 IndexedDB；同时维护内存与 legacy storage 兼容恢复逻辑。
+                bklist = Array.isArray(config && config.bookmarks) ? config.bookmarks : [];
                 var incomingProgress = clampProgress(msg.progress);
                 if (incomingProgress === null) {
                     incomingProgress = clampProgress(msg.curprog);
@@ -1374,23 +1941,30 @@ function handlePort(port) {
                 if (incomingProgress === null) {
                     incomingProgress = 0;
                 }
+                var incomingUrl = String(msg.cururl || '').trim();
+                if (!incomingUrl) {
+                    return;
+                }
                 // Update bookmark
                 for (var i = 0; i < bklist.length; i++) {
-                    if (sameNovel(bklist[i].cururl, msg.cururl)) {
+                    if (sameNovel(bklist[i].cururl, incomingUrl)) {
                         bklist = bklist.slice(0, i).concat(bklist.slice(i + 1, bklist.length));
                         break;
                     }
                 };
-                bklist.push({ rTitle: msg.rTitle, cururl: msg.cururl, curprog: incomingProgress });
-                chrome.storage.local.set({ 'bookmarks': bklist }, function () {
-                    console.info("Bookmarks Updated Done");
-                    if (detport != null)
-                        detport.postMessage({ "type": "action", "content": "refresh" });
-                    /*
-                    detport.forEach(port => {
-                        port.postMessage({ "type": "action", "content": "refresh" });
+                var incomingBookmark = { rTitle: String(msg.rTitle || ''), cururl: incomingUrl, curprog: incomingProgress };
+                bklist.push(incomingBookmark);
+
+                upsertBookmarkRecord(incomingBookmark).then(function () {
+                    return mergeReadingTimeByBookmark(incomingBookmark, 'updatebk');
+                }).then(function () {
+                    config.bookmarks = bklist;
+                    chrome.storage.local.set({ 'bookmarks': bklist }, function () {
+                        console.info("Bookmarks Updated Done");
+                        notifyDetailsRefresh();
                     });
-                    */
+                }).catch(function (err) {
+                    console.warn('updatebk persist failed:', err && err.message ? err.message : String(err));
                 });
             }
         });
@@ -1491,7 +2065,7 @@ function findBookmarkProgressForUrl(tabUrl, bookmarks) {
 function isInjectionAllowed(tabUrl) {
     if (!tabUrl) return false;
     // 不允许的协议前缀
-    const deniedPrefixes = ['about:', 'chrome:', 'edge:', 'chrome-extension:', 'chrome-search:', 'devtools:'];
+    const deniedPrefixes = ['about:', 'chrome:', 'chrome-error:', 'edge:', 'edge-error:', 'chrome-extension:', 'chrome-search:', 'devtools:'];
     for (const prefix of deniedPrefixes) {
         if (tabUrl.startsWith(prefix)) return false;
     }
@@ -1538,6 +2112,8 @@ function readPage(conf = null, targetTab = null) {
                     chrome.scripting.insertCSS({
                         target: { tabId: tabIn.id },
                         files: ["src/design-tokens.css", "src/main.css", "src/font/style.css"]
+                    }).catch(function (err) {
+                        console.warn('insertCSS(files) failed:', err && err.message ? err.message : String(err));
                     });
 
                     // 如果 css 变量有值，插入 CSS 代码
@@ -1547,12 +2123,16 @@ function readPage(conf = null, targetTab = null) {
                         chrome.scripting.insertCSS({
                             target: { tabId: tabIn.id },
                             css: injectedConf.css
+                        }).catch(function (err) {
+                            console.warn('insertCSS(text) failed:', err && err.message ? err.message : String(err));
                         });
                     }
                     // 执行 JavaScript 文件
                     chrome.scripting.executeScript({
                         target: { tabId: tabIn.id },
                         files: ["src/pre-main.js", "src/html-handling.js", "src/pageRewrite.js", "src/main.js"]
+                    }).catch(function (err) {
+                        console.warn('executeScript failed:', err && err.message ? err.message : String(err));
                     });
                 });
             });

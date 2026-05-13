@@ -476,7 +476,9 @@ function buildSyncBookRows(records) {
             firstReadAt: Number(rec.firstReadAt || 0),
             lastReadAt: Number(rec.lastReadAt || 0),
             updatedAt: Number(rec.updatedAt || 0),
-            dailyDurations: rec.dailyDurations && typeof rec.dailyDurations === 'object' ? rec.dailyDurations : {}
+            dailyDurations: rec.dailyDurations && typeof rec.dailyDurations === 'object' ? rec.dailyDurations : {},
+            hourlyDurations: rec.hourlyDurations && typeof rec.hourlyDurations === 'object' ? rec.hourlyDurations : {},
+            entries: Array.isArray(rec.entries) ? rec.entries : []
         });
     }
     return rows;
@@ -587,20 +589,37 @@ function syncReadingTimeToXmnote(endpoint, records) {
 
     function buildXmnotePayload(row) {
         var uniqueid = String(row && row.uniqueid || '').trim();
-        var daily = row && row.dailyDurations && typeof row.dailyDurations === 'object' ? row.dailyDurations : {};
-        var keys = Object.keys(daily);
+        var hourly = row && row.hourlyDurations && typeof row.hourlyDurations === 'object' ? row.hourlyDurations : {};
+        var keys = Object.keys(hourly);
         var fuzzy = [];
         for (var i = 0; i < keys.length; i++) {
-            var dateKey = keys[i];
-            var seconds = Math.floor(Number(daily[dateKey] || 0) / 1000);
+            var hourKey = keys[i];
+            var seconds = Math.floor(Number(hourly[hourKey] || 0) / 1000);
             if (!Number.isFinite(seconds) || seconds <= 0) {
                 continue;
             }
-            var dateSec = Math.floor(new Date(dateKey + 'T00:00:00').getTime() / 1000);
+            var dateSec = Math.floor(new Date(hourKey.replace(' ', 'T') + ':00:00').getTime() / 1000);
             if (!Number.isFinite(dateSec) || dateSec <= 0) {
                 continue;
             }
             fuzzy.push({ date: dateSec, durationSeconds: seconds });
+        }
+
+        if (fuzzy.length === 0) {
+            var daily = row && row.dailyDurations && typeof row.dailyDurations === 'object' ? row.dailyDurations : {};
+            var dateKeys = Object.keys(daily);
+            for (var d = 0; d < dateKeys.length; d++) {
+                var dateKey = dateKeys[d];
+                var daySeconds = Math.floor(Number(daily[dateKey] || 0) / 1000);
+                if (!Number.isFinite(daySeconds) || daySeconds <= 0) {
+                    continue;
+                }
+                var daySec = Math.floor(new Date(dateKey + 'T00:00:00').getTime() / 1000);
+                if (!Number.isFinite(daySec) || daySec <= 0) {
+                    continue;
+                }
+                fuzzy.push({ date: daySec, durationSeconds: daySeconds });
+            }
         }
         fuzzy.sort(function (a, b) { return a.date - b.date; });
 
@@ -613,8 +632,49 @@ function syncReadingTimeToXmnote(endpoint, records) {
         }
 
         var lastReadAtSec = Math.floor(Number(row && (row.lastReadAt || row.updatedAt || Date.now())) / 1000);
+        var rangeNote = '';
+        if (fuzzy.length > 0) {
+            var firstBucket = fuzzy[0];
+            var lastBucket = fuzzy[fuzzy.length - 1];
+            var rangeStart = new Date(firstBucket.date * 1000).toISOString();
+            var rangeEnd = new Date((lastBucket.date + 3600) * 1000).toISOString();
+            rangeNote = '\n小时范围: ' + rangeStart + ' ~ ' + rangeEnd;
+        }
+        var mappedEntries = [];
+        var rawEntries = Array.isArray(row && row.entries) ? row.entries : [];
+        for (var e = 0; e < rawEntries.length; e++) {
+            var item = rawEntries[e] || {};
+            var text = String(item.text || '').trim();
+            if (!text) {
+                continue;
+            }
+            var note = String(item.note || '').trim();
+            var chapter = String(item.chapter || '').trim();
+            var ts = Number(item.time || 0);
+            if (!Number.isFinite(ts) || ts <= 0) {
+                ts = lastReadAtSec;
+            }
+            if (ts > 1000000000000) {
+                ts = Math.floor(ts / 1000);
+            }
+            mappedEntries.push({
+                text: text,
+                note: note,
+                chapter: chapter,
+                time: Math.floor(ts)
+            });
+        }
+        if (mappedEntries.length === 0) {
+            mappedEntries.push({
+                chapter: '阅读时间同步',
+                text: '阅读时间导入（uniqueid=' + uniqueid + '）',
+                note: '来源: LeanRabbook\nURL: ' + String(row && row.cururl || '') + rangeNote,
+                time: lastReadAtSec
+            });
+        }
+
         return {
-            title: String(row && (row.title || row.cururl) || '未命名书籍'),
+            title: String(row && (row.uniqueid || row.title || row.cururl) || '未命名书籍'),
             type: 1,
             locationUnit: 1,
             readingStatus: 2,
@@ -624,14 +684,7 @@ function syncReadingTimeToXmnote(endpoint, records) {
             fuzzyReadingDurations: fuzzy,
             currentPage: 0,
             totalPageCount: 100,
-            entries: [
-                {
-                    chapter: '阅读时间同步',
-                    text: '阅读时间导入（uniqueid=' + uniqueid + '）',
-                    note: '来源: LeanRabbook\nURL: ' + String(row && row.cururl || ''),
-                    time: lastReadAtSec
-                }
-            ]
+            entries: mappedEntries
         };
     }
 
@@ -785,7 +838,7 @@ async function submitXmnoteSync() {
 
     xmnoteSyncConfig = await saveXmnoteSyncConfigToStorage({ endpoint: endpoint });
     var importedCount = Number(response.importedCount || readyRows.length);
-    var tip = '同步成功，已导入 ' + importedCount + ' 本书。';
+    var tip = '同步成功，已导入 ' + importedCount + ' 本书（含阅读时间与书摘）。';
     if (Number(ensureRet.skippedNoUniqueId || 0) > 0) {
         tip += '（跳过无 uniqueid：' + Number(ensureRet.skippedNoUniqueId) + '）';
     }
@@ -818,6 +871,21 @@ function mergeDailyDurationMaps(target, source) {
 
 function getDailyDurationMapFromRecord(record) {
     var daily = {};
+    if (record && record.hourlyDurations && typeof record.hourlyDurations === 'object') {
+        var hourKeys = Object.keys(record.hourlyDurations);
+        for (var h = 0; h < hourKeys.length; h++) {
+            var hourKey = hourKeys[h];
+            var hourVal = Number(record.hourlyDurations[hourKey] || 0);
+            if (!Number.isFinite(hourVal) || hourVal <= 0) {
+                continue;
+            }
+            var dayKey = String(hourKey).split(' ')[0];
+            if (!dayKey) {
+                continue;
+            }
+            daily[dayKey] = Number(daily[dayKey] || 0) + hourVal;
+        }
+    }
     if (record && record.dailyDurations && typeof record.dailyDurations === 'object') {
         var keys = Object.keys(record.dailyDurations);
         for (var i = 0; i < keys.length; i++) {
@@ -952,15 +1020,65 @@ function renderGlobalReadingTimeSummary(records) {
     $grid.html(cells.join(''));
 }
 
+function exportBookData(bookmarkId) {
+    var bookmark = null;
+    for (var i = 0; i < bklist.length; i++) {
+        if (bklist[i].id === bookmarkId) {
+            bookmark = bklist[i];
+            break;
+        }
+    }
+    if (!bookmark) {
+        return { ok: false, error: 'bookmark_not_found' };
+    }
+    var cururlKey = bookmark.cururlKey || '';
+    var records = [];
+    for (var j = 0; j < readingTimeList.length; j++) {
+        var rec = readingTimeList[j];
+        if (!rec) { continue; }
+        var recKey = rec.cururlKey || '';
+        if (recKey && recKey === cururlKey) {
+            records.push(rec);
+        }
+    }
+    return { ok: true, bookmark: bookmark, readingRecords: records };
+}
+
+function exportAllData() {
+    return { ok: true, bookmarks: bklist, readingRecords: readingTimeList };
+}
+
+function downloadJsonFile(data, filename, options) {
+    var opts = options || {};
+    var appendDate = opts.appendDate !== false;
+    var sanitizedFilename = (filename || 'export').replace(/[\\/:*?"<>|]/g, '_');
+    var timestamp = new Date().toISOString().slice(0, 10);
+    var finalFilename = appendDate ? (sanitizedFilename + '_' + timestamp + '.json') : (sanitizedFilename + '.json');
+    
+    var jsonStr = JSON.stringify(data, null, 2);
+    var blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+    var link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', finalFilename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('文件已导出：' + finalFilename, 'success', 2200);
+}
+
 function deleteBookmarkById(bookmarkId) {
     return new Promise(function (resolve) {
         chrome.runtime.sendMessage({ type: 'bookmarkDeleteById', id: bookmarkId }, function (response) {
             if (chrome.runtime.lastError) {
                 console.warn('deleteBookmarkById failed:', chrome.runtime.lastError.message);
-                resolve(false);
+                resolve({ ok: false, readingRecordDeleted: 0, entryDeletedCount: 0 });
                 return;
             }
-            resolve(!!(response && response.ok));
+            resolve(response || { ok: false, readingRecordDeleted: 0, entryDeletedCount: 0 });
         });
     });
 }
@@ -1147,6 +1265,21 @@ function ensureXmnoteSyncModalUi() {
 
 function getDailyDurationMap(record) {
     var daily = {};
+    if (record && record.hourlyDurations && typeof record.hourlyDurations === 'object') {
+        var hourKeys = Object.keys(record.hourlyDurations);
+        for (var h = 0; h < hourKeys.length; h++) {
+            var hourKey = hourKeys[h];
+            var hourVal = Number(record.hourlyDurations[hourKey] || 0);
+            if (!Number.isFinite(hourVal) || hourVal <= 0) {
+                continue;
+            }
+            var dayKey = String(hourKey).split(' ')[0];
+            if (!dayKey) {
+                continue;
+            }
+            daily[dayKey] = Number(daily[dayKey] || 0) + hourVal;
+        }
+    }
     if (record && record.dailyDurations && typeof record.dailyDurations === 'object') {
         var keys = Object.keys(record.dailyDurations);
         for (var i = 0; i < keys.length; i++) {
@@ -1315,7 +1448,7 @@ function displayPage() {
         var bookmarkId = bklist[i].id || '';
         var uniqueIdLabel = (bklist[i].bookuniqueid || '').trim();
         var uidTag = uniqueIdLabel ? ("<span class='uid-tag'>ID: " + uniqueIdLabel + "</span>") : '';
-        var cstr = "<li><span class='spanbut time' title='查看该书阅读时间'>时</span><span class='spanbut uid' title='设置唯一ID'>ID</span><span class='spanbut del'>删</span><span class='linka' bookmark-id='" + bookmarkId + "' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + uidTag + "</span></li>";
+        var cstr = "<li><span class='spanbut time' title='查看该书阅读时间'>时</span><span class='spanbut uid' title='设置唯一ID'>ID</span><span class='spanbut export' title='导出该书所有记录'>导</span><span class='spanbut del'>删</span><span class='linka' bookmark-id='" + bookmarkId + "' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + uidTag + "</span></li>";
         $('.bookmarks-list').append(cstr);
     }
 
@@ -1383,26 +1516,84 @@ function displayPage() {
         }, 200);
     });
 
+    $('.export.spanbut').off('click').on('click', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var $target = $(this).parent().find('.linka').eq(0);
+        var bookmarkId = $target.attr('bookmark-id') || '';
+        var ind = Number($target.attr('ind'));
+        if (!bookmarkId || !Number.isFinite(ind) || !bklist[ind]) {
+            showToast('未找到对应记录。', 'danger', 2200);
+            return;
+        }
+        var uniqueid = String((bklist[ind].bookuniqueid || bklist[ind].uniqueid || '')).trim();
+        while (!uniqueid) {
+            var input = window.prompt('导出该书需要 uniqueid 作为文件名，请输入 uniqueid（不能为空）', '');
+            if (input === null) {
+                showToast('已取消导出：需要 uniqueid。', 'warn', 2400);
+                return;
+            }
+            uniqueid = String(input || '').trim();
+            if (!uniqueid) {
+                showToast('uniqueid 不能为空，请重新输入。', 'danger', 2200);
+            }
+        }
+
+        var saved = await setBookmarkUniqueId(bookmarkId, uniqueid);
+        if (!saved) {
+            showToast('保存 uniqueid 失败，请稍后重试。', 'danger', 2400);
+            return;
+        }
+        bklist[ind].bookuniqueid = uniqueid;
+
+        var exportData = exportBookData(bookmarkId);
+        if (!exportData || !exportData.ok) {
+            showToast((exportData && exportData.error) || '导出失败，请稍后重试。', 'danger', 2400);
+            return;
+        }
+        if (exportData.bookmark) {
+            exportData.bookmark.bookuniqueid = uniqueid;
+            exportData.bookmark.uniqueid = uniqueid;
+        }
+        var fileNameBase = uniqueid + '_' + Date.now();
+        downloadJsonFile(exportData, fileNameBase, { appendDate: false });
+    });
+
+    $('#readingtime-export-all-btn').off('click').on('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!Array.isArray(bklist) || bklist.length === 0) {
+            showToast('暂无可导出的记录。', 'danger', 2200);
+            return;
+        }
+        var exportData = exportAllData();
+        downloadJsonFile(exportData, 'rabbook_all');
+    });
+
     $('.del.spanbut').off('click').on('click', async function () {
-        var ok = await showConfirmDialog('确定要删除这条阅读记录吗？', '删除确认');
+
+        var ok = await showConfirmDialog('阅读记录和书摘也将删除，建议先导出。确认删除吗？', '删除确认');
         if (!ok) {
             return;
         }
         var $target = $(this).parent().find('.linka').eq(0);
         var bookmarkId = $target.attr('bookmark-id') || '';
         var deleted = await deleteBookmarkById(bookmarkId);
-        if (!deleted) {
+        if (!deleted || !deleted.ok) {
             showToast('删除失败，请稍后重试。', 'danger', 2400);
             return;
         }
-        showToast('已删除阅读记录');
+        var readingDeleted = Number(deleted.readingRecordDeleted || 0);
+        var entryDeleted = Number(deleted.entryDeletedCount || 0);
+        var tip = '已删除书籍';
+        if (readingDeleted > 0 || entryDeleted > 0) {
+            tip += '（阅读记录 ' + readingDeleted + ' 条，书摘 ' + entryDeleted + ' 条）';
+        }
+        showToast(tip);
         setTimeout(function () {
             window.location.reload();
         }, 280);
     });
-
-
-
     $('.linka').click(function () {
         var ind = $(this).attr('ind');
         console.log($(this).attr('ind'));

@@ -521,6 +521,18 @@ textarea.form-input {
   color: white;
 }
 
+.bookmarks-list li .spanbut.export {
+  background: rgba(249, 115, 22, 0.12);
+  color: #ea580c;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.bookmarks-list li .spanbut.export:hover {
+  background: #ea580c;
+  color: white;
+}
+
 .bookmarks-list li .spanbut.del:hover {
   background: var(--color-danger);
   color: white;

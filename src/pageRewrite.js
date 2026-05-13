@@ -14,6 +14,293 @@ var PAGINATION_VERTICAL_BUFFER_LINE_RATIO = 0.35;
 var PAGINATION_VERTICAL_BUFFER_COMPENSATION_PX = 4;
 var PAGINATION_VERTICAL_BUFFER_REFERENCE_FONT_PX = 30;
 var PAGINATION_VERTICAL_BUFFER_MIN_SCALE = 0.4;
+var rbEntryBusy = false;
+
+function rbGetBookIdentityKey(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return '';
+    }
+    try {
+        var parsed = new URL(rawUrl);
+        var parts = (parsed.pathname || '').split('/').filter(function (it) { return !!it; });
+        if (parts.length > 0) {
+            parts = parts.slice(0, parts.length - 1);
+        }
+        return parsed.origin + '/' + parts.join('/');
+    } catch (e) {
+        var normalized = rawUrl.split('#')[0].split('?')[0];
+        var arr = normalized.split('/');
+        if (arr.length > 0 && arr[arr.length - 1] === '') {
+            arr.pop();
+        }
+        if (arr.length > 0) {
+            arr.pop();
+        }
+        return arr.join('/');
+    }
+}
+
+function rbSendMessage(msg) {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage(msg, function (resp) {
+            if (chrome.runtime.lastError) {
+                resolve({ ok: false, error: 'runtime_error', message: chrome.runtime.lastError.message || 'runtime sendMessage failed' });
+                return;
+            }
+            resolve(resp || { ok: false, error: 'empty_response' });
+        });
+    });
+}
+
+function rbShowToast(message, type) {
+    var host = document.getElementById('rb-entry-toast-host');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'rb-entry-toast-host';
+        document.body.appendChild(host);
+    }
+    var item = document.createElement('div');
+    item.className = 'rb-entry-toast rb-entry-toast-' + (type || 'info');
+    item.textContent = message;
+    host.appendChild(item);
+    setTimeout(function () {
+        if (item && item.parentNode) {
+            item.parentNode.removeChild(item);
+        }
+    }, 2200);
+}
+
+function rbShowInputDialog(options) {
+    var opts = options || {};
+    var title = String(opts.title || '请输入');
+    var message = String(opts.message || '');
+    var placeholder = String(opts.placeholder || '');
+    var defaultValue = String(opts.defaultValue || '');
+    var allowSkip = !!opts.allowSkip;
+    var requireNonEmpty = !!opts.requireNonEmpty;
+
+    return new Promise(function (resolve) {
+        // 标记为输入对话框打开（禁用快捷键）
+        window.rbInputDialogOpen = true;
+        var old = document.getElementById('rb-entry-dialog-backdrop');
+        if (old && old.parentNode) {
+            old.parentNode.removeChild(old);
+        }
+
+        var backdrop = document.createElement('div');
+        backdrop.id = 'rb-entry-dialog-backdrop';
+        backdrop.innerHTML = '' +
+            '<div class="rb-entry-dialog" role="dialog" aria-modal="true">' +
+            '  <div class="rb-entry-dialog-title"></div>' +
+            '  <div class="rb-entry-dialog-message"></div>' +
+            '  <textarea class="rb-entry-dialog-input" rows="4"></textarea>' +
+            '  <div class="rb-entry-dialog-actions">' +
+            '    <button type="button" class="rb-entry-btn rb-entry-btn-cancel">取消</button>' +
+            (allowSkip ? '    <button type="button" class="rb-entry-btn rb-entry-btn-skip">跳过</button>' : '') +
+            '    <button type="button" class="rb-entry-btn rb-entry-btn-confirm">保存</button>' +
+            '  </div>' +
+            '</div>';
+        document.body.appendChild(backdrop);
+
+        var titleEl = backdrop.querySelector('.rb-entry-dialog-title');
+        var msgEl = backdrop.querySelector('.rb-entry-dialog-message');
+        var inputEl = backdrop.querySelector('.rb-entry-dialog-input');
+        var btnCancel = backdrop.querySelector('.rb-entry-btn-cancel');
+        var btnSkip = backdrop.querySelector('.rb-entry-btn-skip');
+        var btnConfirm = backdrop.querySelector('.rb-entry-btn-confirm');
+
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+        inputEl.placeholder = placeholder;
+        inputEl.value = defaultValue;
+
+        function close(action) {
+            var value = (inputEl.value || '').trim();
+            if (action === 'confirm' && requireNonEmpty && !value) {
+                rbShowToast('该项不能为空', 'warn');
+                inputEl.focus();
+                return;
+            }
+            if (backdrop && backdrop.parentNode) {
+                backdrop.parentNode.removeChild(backdrop);
+            }
+            // 标记对话框已关闭（恢复快捷键）
+            window.rbInputDialogOpen = false;
+            resolve({ action: action, value: value });
+        }
+
+        btnCancel.addEventListener('click', function (e) {
+            e.preventDefault();
+            close('cancel');
+        });
+        if (btnSkip) {
+            btnSkip.addEventListener('click', function (e) {
+                e.preventDefault();
+                close('skip');
+            });
+        }
+        btnConfirm.addEventListener('click', function (e) {
+            e.preventDefault();
+            close('confirm');
+        });
+        inputEl.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                close('cancel');
+                return;
+            }
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                close('confirm');
+            }
+        });
+        setTimeout(function () {
+            inputEl.focus();
+        }, 0);
+    });
+}
+
+function rbApplyHighlightRange(range) {
+    if (!range) {
+        return;
+    }
+    var span = document.createElement('span');
+    span.className = 'rb-entry-highlight';
+    try {
+        range.surroundContents(span);
+        return;
+    } catch (e) {}
+    try {
+        var frag = range.extractContents();
+        span.appendChild(frag);
+        range.insertNode(span);
+    } catch (err) {
+        // ignore highlight fallback failure
+    }
+}
+
+async function rbEnsureBookUniqueId(cururlValue, chapterTitle) {
+    var cururlKey = rbGetBookIdentityKey(cururlValue);
+    if (!cururlKey) {
+        rbShowToast('无法识别当前书籍，暂不支持书摘', 'warn');
+        return '';
+    }
+
+    var found = await rbSendMessage({ type: 'bookmarkGetByCururlKey', cururlKey: cururlKey });
+    var existingUid = '';
+    if (found && found.ok && found.record) {
+        existingUid = String(found.record.bookuniqueid || found.record.uniqueid || '').trim();
+    }
+    if (existingUid) {
+        return existingUid;
+    }
+
+    var input = await rbShowInputDialog({
+        title: '首次使用书摘需设置 uniqueid',
+        message: 'uniqueid 是后续同步到 xmnote 的关键索引。',
+        placeholder: '请输入 uniqueid',
+        requireNonEmpty: true,
+        allowSkip: false
+    });
+    if (!input || input.action !== 'confirm' || !input.value) {
+        rbShowToast('未设置 uniqueid，当前不支持书摘保存', 'warn');
+        return '';
+    }
+
+    var ensureRet = await rbSendMessage({
+        type: 'bookmarkEnsureUniqueId',
+        cururl: cururlValue,
+        cururlKey: cururlKey,
+        rTitle: chapterTitle,
+        bookuniqueid: input.value
+    });
+    if (!ensureRet || !ensureRet.ok) {
+        rbShowToast('保存 uniqueid 失败，请稍后重试', 'warn');
+        return '';
+    }
+    return String(input.value || '').trim();
+}
+
+async function rbHandleSelectionEntry() {
+    if (rbEntryBusy) {
+        return;
+    }
+    var root = document.getElementById('gnContent');
+    if (!root) {
+        return;
+    }
+    var selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+        return;
+    }
+    var range = selection.getRangeAt(0);
+    if (!root.contains(range.commonAncestorContainer)) {
+        return;
+    }
+
+    var selectedText = String(selection.toString() || '').trim();
+    if (!selectedText) {
+        return;
+    }
+    var savedRange = range.cloneRange();
+    selection.removeAllRanges();
+
+    rbEntryBusy = true;
+    try {
+        var chapter = ($('#lrbk_title').text() || rTitle || '').trim();
+        var uid = await rbEnsureBookUniqueId(cururl, chapter);
+        if (!uid) {
+            return;
+        }
+
+        var noteInput = await rbShowInputDialog({
+            title: '添加书摘想法（可跳过）',
+            message: selectedText,
+            placeholder: '输入你的想法，可留空',
+            allowSkip: true,
+            requireNonEmpty: false
+        });
+        var note = '';
+        if (noteInput && noteInput.action === 'confirm') {
+            note = String(noteInput.value || '').trim();
+        }
+
+        var entry = {
+            text: selectedText,
+            note: note,
+            chapter: chapter,
+            time: Math.floor(Date.now() / 1000)
+        };
+        var saveRet = await rbSendMessage({
+            type: 'readingEntryAdd',
+            cururl: cururl,
+            rTitle: chapter,
+            bookuniqueid: uid,
+            entry: entry
+        });
+        if (!saveRet || !saveRet.ok) {
+            rbShowToast('书摘保存失败，请稍后重试', 'warn');
+            return;
+        }
+
+        rbApplyHighlightRange(savedRange);
+        rbShowToast(note ? '书摘已保存' : '书摘已保存（未填写想法）', 'success');
+    } finally {
+        rbEntryBusy = false;
+    }
+}
+
+function rbBindSelectionEntry() {
+    var root = document.getElementById('gnContent');
+    if (!root) {
+        return;
+    }
+    root.onmouseup = function () {
+        setTimeout(function () {
+            rbHandleSelectionEntry();
+        }, 0);
+    };
+}
 
 function lastpage() {
     return $("#currentindex").text() == $("#totalindex").text();
@@ -495,6 +782,9 @@ function rewritePage(url, startp) {
     const preventEvent = (event) => {
         // 若焦点在自定义弹窗输入框内，跳过快捷键处理
         if (event.target && event.target.tagName === 'INPUT') return;
+        if (event.target && event.target.tagName === 'TEXTAREA') return;
+        // 若输入对话框打开，跳过快捷键处理
+        if (window.rbInputDialogOpen) return;
 
         var code = event.code || '';
         var key = (event.key || '').toLowerCase();
@@ -705,6 +995,8 @@ function rewritePage(url, startp) {
         }
         //detectBottom();
     });
+
+    rbBindSelectionEntry();
 
 
     if (rTitle != null)

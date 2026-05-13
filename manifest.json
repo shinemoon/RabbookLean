@@ -46,6 +46,8 @@
 				"src/details.html",
 				"src/details.css",
 				"src/details.js",
+				"src/entries.html",
+				"src/entries.js",
 				"src/html-handling.js",
 				"src/pageRewrite.js",
 				"src/jquery.js",

@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>书摘查看</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .entries-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .entries-header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .entries-header h1 {
+            margin-bottom: 15px;
+            color: #222;
+            font-size: 24px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        input[type="text"],
+        select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            min-width: 150px;
+        }
+
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+        }
+
+        .view-mode {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mode-btn {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background: #2196F3;
+            color: white;
+            border-color: #2196F3;
+        }
+
+        .mode-btn:hover {
+            border-color: #2196F3;
+        }
+
+        .entries-stats {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .entries-list {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .book-section {
+            border-bottom: 1px solid #eee;
+        }
+
+        .book-section:last-child {
+            border-bottom: none;
+        }
+
+        .book-header {
+            padding: 15px 20px;
+            background: #f5f5f5;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .book-header:hover {
+            background: #efefef;
+        }
+
+        .book-header.collapsed .book-toggle {
+            transform: rotate(-90deg);
+        }
+
+        .book-toggle {
+            display: inline-block;
+            transition: transform 0.2s;
+            color: #2196F3;
+            margin-right: 10px;
+        }
+
+        .book-info {
+            flex: 1;
+        }
+
+        .book-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #222;
+        }
+
+        .book-meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 3px;
+        }
+
+        .entry-count {
+            background: #e3f2fd;
+            color: #2196F3;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 10px;
+        }
+
+        .book-entries {
+            display: none;
+            border-top: 1px solid #eee;
+        }
+
+        .book-entries.expanded {
+            display: block;
+        }
+
+        .entry-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+
+        .entry-item:hover {
+            background: #fafafa;
+        }
+
+        .entry-item:last-child {
+            border-bottom: none;
+        }
+
+        .entry-text {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #fffacd;
+            border-left: 3px solid #ffc107;
+            border-radius: 2px;
+            font-style: italic;
+        }
+
+        .entry-note {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #f5f5f5;
+            border-radius: 2px;
+        }
+
+        .entry-note.empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        .entry-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 8px;
+        }
+
+        .entry-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: 10px;
+        }
+
+        .entry-edit-btn,
+        .entry-delete-btn {
+            padding: 2px 8px;
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .entry-edit-btn:hover {
+            background: #e3f2fd;
+            border-color: #2196F3;
+            color: #2196F3;
+        }
+
+        .entry-delete-btn:hover {
+            background: #ffebee;
+            border-color: #f44336;
+            color: #f44336;
+        }
+
+        .entry-book-name {
+            display: inline-block;
+            background: #fff3e0;
+            color: #e65100;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 8px;
+            font-weight: 500;
+        }
+
+        .entry-chapter {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 10px;
+        }
+
+        .entry-time {
+            display: inline-block;
+        }
+
+        .empty-state {
+            padding: 40px 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .empty-state-hint {
+            font-size: 13px;
+            color: #bbb;
+        }
+
+        .loading {
+            padding: 40px 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-results {
+            padding: 40px 20px;
+            text-align: center;
+            color: #999;
+        }
+
+        .entries-toast-container {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+
+        .entries-toast {
+            min-width: 220px;
+            max-width: 360px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 13px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+            transform: translateY(-6px);
+            opacity: 0;
+            transition: transform 0.18s ease, opacity 0.18s ease;
+        }
+
+        .entries-toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .entries-toast.success {
+            background: #2e7d32;
+        }
+
+        .entries-toast.warn {
+            background: #ef6c00;
+        }
+
+        .entries-toast.danger {
+            background: #c62828;
+        }
+
+        .entries-dialog-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.35);
+            z-index: 9998;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .entries-dialog {
+            width: min(560px, 100%);
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .entries-dialog-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #222;
+            margin-bottom: 8px;
+        }
+
+        .entries-dialog-message {
+            font-size: 13px;
+            color: #555;
+            line-height: 1.6;
+            max-height: 180px;
+            overflow: auto;
+            background: #fafafa;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 10px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .entries-dialog-input {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 88px;
+            margin-bottom: 12px;
+        }
+
+        .entries-dialog-input:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.12);
+        }
+
+        .entries-dialog-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .entries-dialog-btn {
+            border: 1px solid #ddd;
+            background: #fff;
+            color: #333;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .entries-dialog-btn:hover {
+            border-color: #bbb;
+            background: #f8f8f8;
+        }
+
+        .entries-dialog-confirm {
+            background: #2196F3;
+            color: #fff;
+            border-color: #2196F3;
+        }
+
+        .entries-dialog-confirm:hover {
+            background: #1f88dd;
+            border-color: #1f88dd;
+        }
+
+        .entries-dialog-confirm.danger {
+            background: #d32f2f;
+            border-color: #d32f2f;
+        }
+
+        .entries-dialog-confirm.danger:hover {
+            background: #c62828;
+            border-color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="entries-container">
+        <div class="entries-header">
+            <h1>📚 书摘查看</h1>
+
+            <div class="control-row">
+                <div class="control-group" style="flex: 1; min-width: 200px;">
+                    <label for="search-input">搜索</label>
+                    <input type="text" id="search-input" placeholder="搜索书摘、想法...">
+                </div>
+
+                <div class="control-group">
+                    <label for="filter-select">过滤书籍</label>
+                    <select id="filter-select">
+                        <option value="">-- 全部书籍 --</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>显示模式</label>
+                    <div class="view-mode">
+                        <button class="mode-btn active" data-mode="all">全部</button>
+                        <button class="mode-btn" data-mode="by-book">按书</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="entries-stats">
+                <span>总书摘数: <strong id="total-count">0</strong></span>
+                <span style="margin-left: 20px;">当前显示: <strong id="display-count">0</strong></span>
+            </div>
+        </div>
+
+        <div class="entries-list" id="entries-list">
+            <div class="loading">
+                <div class="spinner"></div>
+                加载中...
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="entries.js"></script>
+</body>
+</html>

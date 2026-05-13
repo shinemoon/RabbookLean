@@ -82,4 +82,22 @@ $(document).ready(function () {
         });
     });
 
+    $('#entries-view').click(function () {
+        const targetUrl = "src/entries.html";
+
+        chrome.tabs.query({}, function (tabs) {
+            // 检查是否已经存在目标页面
+            const existingTab = tabs.find(tab => tab.url.includes(targetUrl));
+
+            if (existingTab) {
+                // 如果找到已有页面，则切换到该页面
+                chrome.tabs.update(existingTab.id, { active: true });
+            } else {
+                // 否则，创建新页面
+                chrome.tabs.create({ url: targetUrl });
+            }
+            window.close();
+        });
+    });
+
 });
