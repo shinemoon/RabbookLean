@@ -36,6 +36,57 @@
     </div>
   </div>
 
+  <!-- ===== 阅读时间统计 ===== -->
+  <div class="section-card topline hide" toggle_target="readingtime">
+    <div class="section-header">
+      <div class="section-title">
+        <span class="icon about">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4"/>
+            <path d="M12 8h.01"/>
+          </svg>
+        </span>
+        <span>阅读时间统计</span>
+      </div>
+      <span class="section-arrow">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </span>
+    </div>
+    <div class="section-body hidetgt readingtime">
+      <div class="readingtime-head">
+        <div class="readingtime-title" id="readingtime-agg-title">所有书籍阅读汇总</div>
+        <div class="readingtime-subtitle" id="readingtime-agg-subtitle">加载中...</div>
+      </div>
+      <div class="readingtime-summary-grid" id="readingtime-agg-summary-grid">
+        <div class="readingtime-summary-empty">正在加载汇总数据...</div>
+      </div>
+      <div class="readingtime-heatmap-panel">
+        <div class="readingtime-panel-title">阅读热力图（全书合并）</div>
+        <div class="readingtime-heatmap-legend">
+          <span>少</span>
+          <span class="legend-block intensity-0"></span>
+          <span class="legend-block intensity-1"></span>
+          <span class="legend-block intensity-2"></span>
+          <span class="legend-block intensity-3"></span>
+          <span class="legend-block intensity-4"></span>
+          <span>多</span>
+        </div>
+        <div class="readingtime-week-labels">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="readingtime-heatmap" id="readingtime-agg-heatmap"></div>
+      </div>
+      <div class="readingtime-sync-actions">
+        <button type="button" class="btn btn-primary readingtime-sync-btn" id="readingtime-sync-btn">纸间书摘同步</button>
+        <div class="readingtime-sync-tip">支持全量或按书籍勾选导入阅读时间，可配置 xmnote 的 ip:port。</div>
+      </div>
+      <div class="readingtime-note">展示为全部书籍汇总统计，不包含单书明细字段。</div>
+    </div>
+  </div>
+
   <!-- ===== 高级配置 ===== -->
   <div class="section-card topline hide" toggle_target="configs">
     <div class="section-header">
@@ -270,5 +321,73 @@
 
 <script type="module" src="details.js"></script>
 </div><!-- end #scroll-container -->
+
+<div id="readingtime-modal-backdrop" class="readingtime-modal-backdrop" aria-hidden="true">
+  <div class="readingtime-modal" role="dialog" aria-modal="true" aria-labelledby="readingtime-modal-title">
+    <div class="readingtime-modal-header">
+      <div>
+        <div class="readingtime-modal-title" id="readingtime-modal-title">单书阅读时间统计</div>
+        <div class="readingtime-modal-subtitle" id="readingtime-modal-subtitle"></div>
+      </div>
+      <button type="button" class="readingtime-modal-close" id="readingtime-modal-close">关闭</button>
+    </div>
+    <div class="readingtime-modal-body">
+      <div class="readingtime-summary-grid" id="readingtime-modal-summary-grid"></div>
+      <div class="readingtime-heatmap-panel">
+        <div class="readingtime-panel-title">该书阅读热力图</div>
+        <div class="readingtime-heatmap-legend">
+          <span>少</span>
+          <span class="legend-block intensity-0"></span>
+          <span class="legend-block intensity-1"></span>
+          <span class="legend-block intensity-2"></span>
+          <span class="legend-block intensity-3"></span>
+          <span class="legend-block intensity-4"></span>
+          <span>多</span>
+        </div>
+        <div class="readingtime-week-labels">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="readingtime-heatmap" id="readingtime-modal-heatmap"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="xmnote-sync-modal-backdrop" class="readingtime-modal-backdrop" aria-hidden="true">
+  <div class="readingtime-modal xmnote-sync-modal" role="dialog" aria-modal="true" aria-labelledby="xmnote-sync-title">
+    <div class="readingtime-modal-header">
+      <div>
+        <div class="readingtime-modal-title" id="xmnote-sync-title">纸间书摘同步</div>
+        <div class="readingtime-modal-subtitle">将阅读时间记录导入到 xmnote</div>
+      </div>
+      <button type="button" class="readingtime-modal-close" id="xmnote-sync-close">关闭</button>
+    </div>
+    <div class="readingtime-modal-body">
+      <div class="form-group">
+        <label class="form-label" for="xmnote-sync-endpoint">xmnote 地址（ip:port）</label>
+        <input class="form-input" type="text" id="xmnote-sync-endpoint" placeholder="例如：127.0.0.1:27123">
+        <div class="form-description">可仅输入 ip:port；若你输入了完整 URL（包含路径），将按该 URL 直接请求。</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">导入范围</label>
+        <div class="xmnote-sync-mode-row">
+          <label class="xmnote-radio-item"><input type="radio" name="xmnote-sync-mode" value="all" checked> 全部书籍</label>
+          <label class="xmnote-radio-item"><input type="radio" name="xmnote-sync-mode" value="partial"> 勾选部分书籍</label>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">书籍列表</label>
+        <div id="xmnote-sync-book-list" class="xmnote-sync-book-list"></div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="xmnote-sync-submit">开始同步</button>
+        <button type="button" class="btn btn-ghost" id="xmnote-sync-cancel">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

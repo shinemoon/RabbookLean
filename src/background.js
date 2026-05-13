@@ -173,6 +173,50 @@ function normalizeUniqueId(raw) {
     return raw.trim();
 }
 
+function getDateKeyFromTs(ts) {
+    var date = new Date(Number(ts || 0));
+    if (isNaN(date.getTime())) {
+        return '';
+    }
+    var year = date.getFullYear();
+    var month = date.getMonth() + 1;
+    var day = date.getDate();
+    return year + '-' + (month < 10 ? '0' + month : '' + month) + '-' + (day < 10 ? '0' + day : '' + day);
+}
+
+function cloneDailyDurations(dailyDurations) {
+    var next = {};
+    if (!dailyDurations || typeof dailyDurations !== 'object') {
+        return next;
+    }
+    var keys = Object.keys(dailyDurations);
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var value = Number(dailyDurations[key] || 0);
+        if (Number.isFinite(value) && value > 0) {
+            next[key] = value;
+        }
+    }
+    return next;
+}
+
+function mergeDailyDurations(target, source) {
+    var next = cloneDailyDurations(target);
+    if (!source || typeof source !== 'object') {
+        return next;
+    }
+    var keys = Object.keys(source);
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        var value = Number(source[key] || 0);
+        if (!Number.isFinite(value) || value <= 0) {
+            continue;
+        }
+        next[key] = Number(next[key] || 0) + value;
+    }
+    return next;
+}
+
 function buildReadingTimeId(cururlKey) {
     return 'time::' + cururlKey;
 }
@@ -192,6 +236,7 @@ function normalizeReadingTimeRecord(input) {
         totalReadingMs: 0,
         totalReadingSec: 0,
         sessionCount: 0,
+        dailyDurations: {},
         firstReadAt: 0,
         lastReadAt: 0,
         updatedAt: Date.now(),
@@ -247,6 +292,18 @@ function mergeReadingTimeRecord(existing, incoming, nowTs, source, options) {
 
     next.totalReadingMs = Number(next.totalReadingMs || 0) + deltaMs;
     next.totalReadingSec = Math.floor(next.totalReadingMs / 1000);
+    if (shouldAccumulateTime && deltaMs > 0) {
+        var dateKey = getDateKeyFromTs(nowTs);
+        if (dateKey) {
+            next.dailyDurations = mergeDailyDurations(next.dailyDurations, (function () {
+                var obj = {};
+                obj[dateKey] = deltaMs;
+                return obj;
+            })());
+        }
+    } else {
+        next.dailyDurations = cloneDailyDurations(next.dailyDurations);
+    }
     next.lastReadAt = nowTs;
     next.updatedAt = nowTs;
     next.lastMergeSource = source || 'updatebk';
@@ -497,6 +554,7 @@ async function compactReadingTimeStoreByBook() {
             var firstReadAt = 0;
             var lastReadAt = 0;
             var sessionCount = 0;
+            var dailyDurations = {};
             var pickedUniqueId = '';
 
             for (var m = 0; m < list.length; m++) {
@@ -521,6 +579,7 @@ async function compactReadingTimeStoreByBook() {
                 if (!pickedUniqueId && uid) {
                     pickedUniqueId = uid;
                 }
+                dailyDurations = mergeDailyDurations(dailyDurations, rec.dailyDurations || {});
             }
 
             var merged = {
@@ -534,6 +593,7 @@ async function compactReadingTimeStoreByBook() {
                 totalReadingMs: totalMs,
                 totalReadingSec: Math.floor(totalMs / 1000),
                 sessionCount: sessionCount,
+                dailyDurations: dailyDurations,
                 firstReadAt: firstReadAt,
                 lastReadAt: lastReadAt || (latest.updatedAt || Date.now()),
                 updatedAt: latest.updatedAt || Date.now(),
@@ -575,9 +635,36 @@ async function deleteBookmarkById(bookmarkId) {
     }
     var db = await openRabbookDb();
     try {
-        var tx = db.transaction(RABBOOK_STACK_STORE, 'readwrite');
-        var store = tx.objectStore(RABBOOK_STACK_STORE);
-        await txRequestToPromise(store.delete(bookmarkId));
+        var tx = db.transaction([RABBOOK_STACK_STORE, RABBOOK_TIME_STORE], 'readwrite');
+        var stackStore = tx.objectStore(RABBOOK_STACK_STORE);
+        var timeStore = tx.objectStore(RABBOOK_TIME_STORE);
+        var existing = await txRequestToPromise(stackStore.get(bookmarkId));
+        await txRequestToPromise(stackStore.delete(bookmarkId));
+
+        var cururlKey = '';
+        if (existing) {
+            cururlKey = existing.cururlKey || getBookIdentityKey(existing.cururl || '');
+        }
+        if (!cururlKey && bookmarkId.indexOf('book::') === 0) {
+            cururlKey = bookmarkId.slice('book::'.length);
+        }
+
+        if (cururlKey) {
+            await txRequestToPromise(timeStore.delete(buildReadingTimeId(cururlKey)));
+
+            // 兼容旧数据：若历史记录 id 未按 time::cururlKey 生成，则按 cururlKey 再扫一遍清理。
+            var rows = await txRequestToPromise(timeStore.getAll());
+            for (var i = 0; i < rows.length; i++) {
+                var row = rows[i];
+                if (!row) {
+                    continue;
+                }
+                var rowKey = row.cururlKey || getBookIdentityKey(row.cururl || '');
+                if (rowKey === cururlKey) {
+                    await txRequestToPromise(timeStore.delete(row.id));
+                }
+            }
+        }
         return { ok: true };
     } finally {
         db.close();
@@ -610,6 +697,15 @@ async function updateBookmarkUniqueId(bookmarkId, bookuniqueid) {
         return { ok: true, record: updatedRecord };
     }
     return { ok: false, error: 'bookmark_update_failed' };
+}
+
+async function updateBookmarkUniqueIdByCururlKey(cururlKey, bookuniqueid) {
+    var key = String(cururlKey || '').trim();
+    if (!key) {
+        return { ok: false, error: 'missing_cururl_key' };
+    }
+    var bookmarkId = 'book::' + key;
+    return updateBookmarkUniqueId(bookmarkId, bookuniqueid);
 }
 
 function notifyDetailsRefresh() {
@@ -720,6 +816,173 @@ function getExternalConfigPayload() {
         linespacing: payload.linespacing,
         contentwidth: payload.contentwidth,
         fontfamily: payload.fontfamily
+    };
+}
+
+function normalizeXmnoteEndpoint(rawEndpoint) {
+    var endpoint = String(rawEndpoint || '').trim();
+    if (!endpoint) {
+        endpoint = '127.0.0.1:8080';
+    }
+    if (/^https?:\/\//i.test(endpoint)) {
+        try {
+            var parsed = new URL(endpoint);
+            var pathname = parsed.pathname || '/';
+            if (pathname === '/' || pathname === '') {
+                parsed.pathname = '/send';
+            }
+            return parsed.toString();
+        } catch (e) {
+            return endpoint;
+        }
+    }
+    var normalized = endpoint.replace(/\/+$/, '');
+    if (/\/send$/i.test(normalized)) {
+        return 'http://' + normalized;
+    }
+    return 'http://' + normalized + '/send';
+}
+
+function normalizeXmnoteImportRecord(rec) {
+    var row = rec || {};
+    var uniqueid = normalizeUniqueId(row.uniqueid || row.bookuniqueid);
+    var daily = row.dailyDurations && typeof row.dailyDurations === 'object' ? row.dailyDurations : {};
+    var dateKeys = Object.keys(daily);
+    var fuzzy = [];
+    for (var i = 0; i < dateKeys.length; i++) {
+        var dateKey = dateKeys[i];
+        var seconds = Math.floor(Number(daily[dateKey] || 0) / 1000);
+        if (!Number.isFinite(seconds) || seconds <= 0) {
+            continue;
+        }
+        var dayTs = Math.floor(new Date(dateKey + 'T00:00:00').getTime() / 1000);
+        if (!Number.isFinite(dayTs) || dayTs <= 0) {
+            continue;
+        }
+        fuzzy.push({
+            date: dayTs,
+            durationSeconds: seconds
+        });
+    }
+    fuzzy.sort(function (a, b) { return a.date - b.date; });
+
+    var totalSeconds = Number(row.totalReadingSec || Math.floor(Number(row.totalReadingMs || 0) / 1000) || 0);
+    if ((!fuzzy || fuzzy.length === 0) && totalSeconds > 0) {
+        var fallbackDay = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+        fuzzy.push({ date: fallbackDay, durationSeconds: totalSeconds });
+    }
+
+    var lastReadAtSec = Math.floor(Number(row.lastReadAt || row.updatedAt || Date.now()) / 1000);
+    return {
+        uniqueid: uniqueid,
+        title: String(row.title || row.rTitle || ''),
+        type: 1,
+        locationUnit: 1,
+        readingStatus: 2,
+        readingStatusChangedDate: lastReadAtSec,
+        source: 'LeanRabbook',
+        tags: ['LeanRabbook', 'uid:' + uniqueid],
+        fuzzyReadingDurations: fuzzy,
+        currentPage: 0,
+        totalPageCount: 100,
+        entries: [
+            {
+                chapter: '阅读时间同步',
+                text: '阅读时间导入（uniqueid=' + uniqueid + '）',
+                note: '来源: LeanRabbook\nURL: ' + String(row.cururl || ''),
+                time: lastReadAtSec
+            }
+        ]
+    };
+}
+
+async function importReadingTimeToXmnote(endpoint, records) {
+    var list = Array.isArray(records) ? records : [];
+    if (list.length === 0) {
+        return { ok: false, error: 'empty_records', message: 'no records to import' };
+    }
+    var normalized = [];
+    for (var i = 0; i < list.length; i++) {
+        var item = normalizeXmnoteImportRecord(list[i]);
+        if (!item.uniqueid) {
+            continue;
+        }
+        normalized.push(item);
+    }
+    if (normalized.length === 0) {
+        return { ok: false, error: 'missing_uniqueid', message: 'all selected books missing uniqueid' };
+    }
+
+    var url = normalizeXmnoteEndpoint(endpoint);
+    var importedCount = 0;
+
+    function fetchWithTimeout(targetUrl, options, timeoutMs) {
+        var controller = new AbortController();
+        var timer = setTimeout(function () {
+            controller.abort();
+        }, timeoutMs);
+
+        var opts = Object.assign({}, options, { signal: controller.signal });
+        return fetch(targetUrl, opts).finally(function () {
+            clearTimeout(timer);
+        });
+    }
+
+    for (var j = 0; j < normalized.length; j++) {
+        var payload = normalized[j];
+        var resp;
+        try {
+            resp = await fetchWithTimeout(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            }, 12000);
+        } catch (err) {
+            var isAbort = !!(err && (err.name === 'AbortError' || String(err.message || '').indexOf('aborted') >= 0));
+            return {
+                ok: false,
+                error: isAbort ? 'network_timeout' : 'network_error',
+                message: isAbort ? '请求超时（12s），请检查 xmnote 地址、手机与电脑网络、以及 App 是否停留在 API 导入页' : (err && err.message ? err.message : String(err)),
+                requestUrl: url
+            };
+        }
+
+        var body = null;
+        try {
+            body = await resp.json();
+        } catch (e) {
+            body = null;
+        }
+
+        if (!resp.ok) {
+            return {
+                ok: false,
+                error: 'remote_http_error',
+                message: body && (body.message || body.error) ? String(body.message || body.error) : ('HTTP ' + resp.status),
+                status: resp.status,
+                requestUrl: url
+            };
+        }
+
+        // xmnote 文档：真正状态码在响应体 code 字段。
+        if (body && typeof body.code !== 'undefined' && Number(body.code) !== 200) {
+            return {
+                ok: false,
+                error: 'remote_business_error',
+                message: String(body.message || ('code=' + body.code)),
+                status: resp.status,
+                requestUrl: url
+            };
+        }
+        importedCount += 1;
+    }
+
+    return {
+        ok: true,
+        importedCount: importedCount,
+        requestUrl: url
     };
 }
 
@@ -872,11 +1135,32 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         return true;
     }
 
+    if (msg.type === 'bookmarkSetUniqueIdByCururlKey') {
+        updateBookmarkUniqueIdByCururlKey(msg.cururlKey, msg.bookuniqueid).then(function (ret) {
+            if (ret.ok) {
+                notifyDetailsRefresh();
+            }
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'bookmark_set_uniqueid_by_key_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
     if (msg.type === 'readingTimeGetAll') {
         listReadingTimeRecords().then(function (rows) {
             sendResponse({ ok: true, readingTime: rows });
         }).catch(function (err) {
             sendResponse({ ok: false, error: 'readingtime_get_failed', message: err && err.message ? err.message : String(err) });
+        });
+        return true;
+    }
+
+    if (msg.type === 'xmnoteImportReadingTime') {
+        importReadingTimeToXmnote(msg.endpoint, msg.records).then(function (ret) {
+            sendResponse(ret);
+        }).catch(function (err) {
+            sendResponse({ ok: false, error: 'xmnote_import_failed', message: err && err.message ? err.message : String(err) });
         });
         return true;
     }

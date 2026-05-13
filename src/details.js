@@ -20,6 +20,7 @@ var sumDelta = 0;
 var scrollCnt = 0;
 
 var bklist = [];
+var readingTimeList = [];
 var css = null;
 var fontfamily = '';
 var detectedSystemFontMap = {};
@@ -27,6 +28,10 @@ var confirmResolver = null;
 var READER_FONT_DEFAULT_VALUE = '__embedded__';
 var READER_FONT_CUSTOM_VALUE = '__custom__';
 var globalWheelBound = false;
+var XMNOTE_SYNC_CONFIG_KEY = 'xmnoteSyncConfig';
+var XMNOTE_DEFAULT_ENDPOINT = '127.0.0.1:8080';
+var xmnoteSyncConfig = { endpoint: XMNOTE_DEFAULT_ENDPOINT };
+var currentSyncBookRows = [];
 
 var FONT_CANDIDATES = [
     { label: '默认（内嵌字体）', value: READER_FONT_DEFAULT_VALUE },
@@ -410,6 +415,543 @@ function getBookmarksFromDb() {
     });
 }
 
+function getReadingTimeRecordsFromDb() {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage({ type: 'readingTimeGetAll' }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.warn('getReadingTimeRecordsFromDb failed:', chrome.runtime.lastError.message);
+                resolve([]);
+                return;
+            }
+            if (!response || !response.ok || !Array.isArray(response.readingTime)) {
+                resolve([]);
+                return;
+            }
+            resolve(response.readingTime);
+        });
+    });
+}
+
+function getXmnoteSyncConfigFromStorage() {
+    return new Promise(function (resolve) {
+        chrome.storage.local.get({ xmnoteSyncConfig: { endpoint: XMNOTE_DEFAULT_ENDPOINT } }, function (result) {
+            var raw = (result && result.xmnoteSyncConfig) || {};
+            var endpoint = (raw.endpoint || XMNOTE_DEFAULT_ENDPOINT);
+            resolve({ endpoint: String(endpoint).trim() || XMNOTE_DEFAULT_ENDPOINT });
+        });
+    });
+}
+
+function saveXmnoteSyncConfigToStorage(config) {
+    var next = config || {};
+    var payload = {
+        endpoint: String(next.endpoint || '').trim() || XMNOTE_DEFAULT_ENDPOINT
+    };
+    return new Promise(function (resolve) {
+        var obj = {};
+        obj[XMNOTE_SYNC_CONFIG_KEY] = payload;
+        chrome.storage.local.set(obj, function () {
+            resolve(payload);
+        });
+    });
+}
+
+function buildSyncBookRows(records) {
+    var list = Array.isArray(records) ? records.slice() : [];
+    list.sort(function (a, b) {
+        return Number(b && b.updatedAt || 0) - Number(a && a.updatedAt || 0);
+    });
+    var rows = [];
+    for (var i = 0; i < list.length; i++) {
+        var rec = list[i] || {};
+        var uniqueid = String(rec.uniqueid || rec.bookuniqueid || '').trim();
+        rows.push({
+            id: String(rec.id || ''),
+            cururlKey: String(rec.cururlKey || ''),
+            title: String(rec.rTitle || rec.cururl || '未命名书籍'),
+            cururl: String(rec.cururl || ''),
+            uniqueid: uniqueid,
+            totalReadingSec: Number(rec.totalReadingSec || Math.floor(Number(rec.totalReadingMs || 0) / 1000) || 0),
+            sessionCount: Number(rec.sessionCount || 0),
+            firstReadAt: Number(rec.firstReadAt || 0),
+            lastReadAt: Number(rec.lastReadAt || 0),
+            updatedAt: Number(rec.updatedAt || 0),
+            dailyDurations: rec.dailyDurations && typeof rec.dailyDurations === 'object' ? rec.dailyDurations : {}
+        });
+    }
+    return rows;
+}
+
+function renderXmnoteSyncBookList() {
+    var $list = $('#xmnote-sync-book-list');
+    if ($list.length === 0) {
+        return;
+    }
+    if (!currentSyncBookRows || currentSyncBookRows.length === 0) {
+        $list.html('<div class="xmnote-sync-book-empty">暂无可同步的阅读时间记录。</div>');
+        return;
+    }
+
+    var html = [];
+    for (var i = 0; i < currentSyncBookRows.length; i++) {
+        var row = currentSyncBookRows[i];
+        var uid = row.uniqueid ? escapeHtml(row.uniqueid) : '-';
+        var uidClass = row.uniqueid ? 'xmnote-sync-book-meta' : 'xmnote-sync-book-meta missing';
+        html.push(
+            '<label class="xmnote-sync-book-item">' +
+            '<input type="checkbox" class="xmnote-sync-book-check" data-book-id="' + escapeHtml(row.id) + '" checked>' +
+            '<span class="xmnote-sync-book-title" title="' + escapeHtml(row.title) + '">' + escapeHtml(row.title) + '</span>' +
+            '<span class="' + uidClass + '">uniqueid: ' + uid + '</span>' +
+            '</label>'
+        );
+    }
+    $list.html(html.join(''));
+}
+
+function setXmnoteBookListDisabled(disabled) {
+    var $list = $('#xmnote-sync-book-list');
+    if ($list.length === 0) {
+        return;
+    }
+    if (disabled) {
+        $list.addClass('is-disabled');
+    } else {
+        $list.removeClass('is-disabled');
+    }
+    $list.find('input.xmnote-sync-book-check').prop('disabled', !!disabled);
+}
+
+function collectSelectedSyncRows(mode) {
+    if (mode === 'all') {
+        return currentSyncBookRows.slice();
+    }
+    var checkedMap = {};
+    $('.xmnote-sync-book-check:checked').each(function () {
+        checkedMap[$(this).attr('data-book-id')] = true;
+    });
+    var picked = [];
+    for (var i = 0; i < currentSyncBookRows.length; i++) {
+        var row = currentSyncBookRows[i];
+        if (checkedMap[row.id]) {
+            picked.push(row);
+        }
+    }
+    return picked;
+}
+
+function closeXmnoteSyncModal() {
+    var $backdrop = $('#xmnote-sync-modal-backdrop');
+    if ($backdrop.length === 0) {
+        return;
+    }
+    $backdrop.removeClass('show').attr('aria-hidden', 'true');
+}
+
+function openXmnoteSyncModal() {
+    var $backdrop = $('#xmnote-sync-modal-backdrop');
+    if ($backdrop.length === 0) {
+        return;
+    }
+    currentSyncBookRows = buildSyncBookRows(readingTimeList);
+    renderXmnoteSyncBookList();
+    $('#xmnote-sync-endpoint').val((xmnoteSyncConfig && xmnoteSyncConfig.endpoint) || XMNOTE_DEFAULT_ENDPOINT);
+    $('input[name="xmnote-sync-mode"][value="all"]').prop('checked', true);
+    setXmnoteBookListDisabled(true);
+    $backdrop.addClass('show').attr('aria-hidden', 'false');
+}
+
+function syncReadingTimeToXmnote(endpoint, records) {
+    function normalizeXmnoteEndpoint(rawEndpoint) {
+        var ep = String(rawEndpoint || '').trim();
+        if (!ep) {
+            ep = XMNOTE_DEFAULT_ENDPOINT;
+        }
+        if (/^https?:\/\//i.test(ep)) {
+            try {
+                var parsed = new URL(ep);
+                var pathname = parsed.pathname || '/';
+                if (pathname === '/' || pathname === '') {
+                    parsed.pathname = '/send';
+                }
+                return parsed.toString();
+            } catch (e) {
+                return ep;
+            }
+        }
+        var normalized = ep.replace(/\/+$/, '');
+        if (/\/send$/i.test(normalized)) {
+            return 'http://' + normalized;
+        }
+        return 'http://' + normalized + '/send';
+    }
+
+    function buildXmnotePayload(row) {
+        var uniqueid = String(row && row.uniqueid || '').trim();
+        var daily = row && row.dailyDurations && typeof row.dailyDurations === 'object' ? row.dailyDurations : {};
+        var keys = Object.keys(daily);
+        var fuzzy = [];
+        for (var i = 0; i < keys.length; i++) {
+            var dateKey = keys[i];
+            var seconds = Math.floor(Number(daily[dateKey] || 0) / 1000);
+            if (!Number.isFinite(seconds) || seconds <= 0) {
+                continue;
+            }
+            var dateSec = Math.floor(new Date(dateKey + 'T00:00:00').getTime() / 1000);
+            if (!Number.isFinite(dateSec) || dateSec <= 0) {
+                continue;
+            }
+            fuzzy.push({ date: dateSec, durationSeconds: seconds });
+        }
+        fuzzy.sort(function (a, b) { return a.date - b.date; });
+
+        if (fuzzy.length === 0) {
+            var fallbackSec = Number(row && row.totalReadingSec || 0);
+            if (Number.isFinite(fallbackSec) && fallbackSec > 0) {
+                var todaySec = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000);
+                fuzzy.push({ date: todaySec, durationSeconds: Math.floor(fallbackSec) });
+            }
+        }
+
+        var lastReadAtSec = Math.floor(Number(row && (row.lastReadAt || row.updatedAt || Date.now())) / 1000);
+        return {
+            title: String(row && (row.title || row.cururl) || '未命名书籍'),
+            type: 1,
+            locationUnit: 1,
+            readingStatus: 2,
+            readingStatusChangedDate: lastReadAtSec,
+            source: 'LeanRabbook',
+            tags: ['LeanRabbook', 'uid:' + uniqueid],
+            fuzzyReadingDurations: fuzzy,
+            currentPage: 0,
+            totalPageCount: 100,
+            entries: [
+                {
+                    chapter: '阅读时间同步',
+                    text: '阅读时间导入（uniqueid=' + uniqueid + '）',
+                    note: '来源: LeanRabbook\nURL: ' + String(row && row.cururl || ''),
+                    time: lastReadAtSec
+                }
+            ]
+        };
+    }
+
+    function fetchWithTimeout(url, options, timeoutMs) {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+        var opts = Object.assign({}, options, { signal: controller.signal });
+        return fetch(url, opts).finally(function () {
+            clearTimeout(timer);
+        });
+    }
+
+    return new Promise(async function (resolve) {
+        var list = Array.isArray(records) ? records : [];
+        if (list.length === 0) {
+            resolve({ ok: false, error: 'empty_records', message: 'no records to import' });
+            return;
+        }
+
+        var url = normalizeXmnoteEndpoint(endpoint);
+        var importedCount = 0;
+        for (var i = 0; i < list.length; i++) {
+            var row = list[i] || {};
+            var uid = String(row.uniqueid || '').trim();
+            if (!uid) {
+                continue;
+            }
+            var payload = buildXmnotePayload(row);
+            var resp;
+            try {
+                resp = await fetchWithTimeout(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }, 12000);
+            } catch (err) {
+                var isAbort = !!(err && (err.name === 'AbortError' || String(err.message || '').indexOf('aborted') >= 0));
+                resolve({
+                    ok: false,
+                    error: isAbort ? 'network_timeout' : 'network_error',
+                    message: isAbort ? '请求超时（12s），请检查 xmnote 地址、网络及 API 导入页' : (err && err.message ? err.message : String(err)),
+                    requestUrl: url
+                });
+                return;
+            }
+
+            var body = null;
+            try {
+                body = await resp.json();
+            } catch (e) {
+                body = null;
+            }
+
+            if (!resp.ok) {
+                resolve({
+                    ok: false,
+                    error: 'remote_http_error',
+                    message: body && (body.message || body.error) ? String(body.message || body.error) : ('HTTP ' + resp.status),
+                    requestUrl: url
+                });
+                return;
+            }
+
+            if (body && typeof body.code !== 'undefined' && Number(body.code) !== 200) {
+                resolve({
+                    ok: false,
+                    error: 'remote_business_error',
+                    message: String(body.message || ('code=' + body.code)),
+                    requestUrl: url
+                });
+                return;
+            }
+            importedCount += 1;
+        }
+
+        resolve({ ok: true, importedCount: importedCount, requestUrl: url });
+    });
+}
+
+async function ensureUniqueIdForSyncRows(rows) {
+    var list = Array.isArray(rows) ? rows : [];
+    var readyRows = [];
+    var skippedNoUniqueId = 0;
+    for (var i = 0; i < list.length; i++) {
+        var row = list[i];
+        if (row.uniqueid) {
+            readyRows.push(row);
+            continue;
+        }
+        var title = row.title || row.cururl || '未命名书籍';
+        var input = window.prompt('《' + title + '》缺少 uniqueid，请输入后继续同步（取消则跳过该书）', '');
+        if (input === null) {
+            skippedNoUniqueId += 1;
+            continue;
+        }
+        var uid = String(input || '').trim();
+        if (!uid) {
+            skippedNoUniqueId += 1;
+            continue;
+        }
+
+        var key = row.cururlKey || (row.id || '').replace(/^time::/, '');
+        var saved = await setBookmarkUniqueIdByCururlKey(key, uid);
+        if (!saved) {
+            return { ok: false, cancelled: false, message: '保存 uniqueid 失败：' + title };
+        }
+        row.uniqueid = uid;
+        readyRows.push(row);
+    }
+    return { ok: true, rows: readyRows, skippedNoUniqueId: skippedNoUniqueId };
+}
+
+async function submitXmnoteSync() {
+    var endpoint = ($('#xmnote-sync-endpoint').val() || '').trim();
+    if (!endpoint) {
+        endpoint = XMNOTE_DEFAULT_ENDPOINT;
+    }
+    var mode = $('input[name="xmnote-sync-mode"]:checked').val() || 'all';
+    var pickedRows = collectSelectedSyncRows(mode);
+    if (!pickedRows || pickedRows.length === 0) {
+        showToast('请至少选择一本书。', 'danger', 2400);
+        return;
+    }
+
+    var ensureRet = await ensureUniqueIdForSyncRows(pickedRows);
+    if (!ensureRet.ok) {
+        showToast('同步前校验失败：' + ensureRet.message, 'danger', 2800);
+        return;
+    }
+
+    var readyRows = Array.isArray(ensureRet.rows) ? ensureRet.rows : [];
+    if (readyRows.length === 0) {
+        showToast('没有可导入书籍（缺少 uniqueid 的书已跳过）。', 'danger', 2800);
+        return;
+    }
+
+    var $submitBtn = $('#xmnote-sync-submit');
+    $submitBtn.prop('disabled', true).text('同步中...');
+
+    var response = await syncReadingTimeToXmnote(endpoint, readyRows);
+    $submitBtn.prop('disabled', false).text('开始同步');
+
+    if (!response || !response.ok) {
+        var failMsg = (response && (response.message || response.error)) ? String(response.message || response.error) : '未知错误';
+        if (response && response.requestUrl) {
+            failMsg += '（URL: ' + response.requestUrl + '）';
+        }
+        showToast('同步失败：' + failMsg, 'danger', 3200);
+        return;
+    }
+
+    xmnoteSyncConfig = await saveXmnoteSyncConfigToStorage({ endpoint: endpoint });
+    var importedCount = Number(response.importedCount || readyRows.length);
+    var tip = '同步成功，已导入 ' + importedCount + ' 本书。';
+    if (Number(ensureRet.skippedNoUniqueId || 0) > 0) {
+        tip += '（跳过无 uniqueid：' + Number(ensureRet.skippedNoUniqueId) + '）';
+    }
+    showToast(tip, 'success', 3200);
+    refreshDetailsPage();
+    closeXmnoteSyncModal();
+}
+
+function mergeDailyDurationMaps(target, source) {
+    var next = {};
+    var targetKeys = Object.keys(target || {});
+    for (var i = 0; i < targetKeys.length; i++) {
+        var tKey = targetKeys[i];
+        var tVal = Number(target[tKey] || 0);
+        if (Number.isFinite(tVal) && tVal > 0) {
+            next[tKey] = tVal;
+        }
+    }
+    var sourceKeys = Object.keys(source || {});
+    for (var j = 0; j < sourceKeys.length; j++) {
+        var sKey = sourceKeys[j];
+        var sVal = Number(source[sKey] || 0);
+        if (!Number.isFinite(sVal) || sVal <= 0) {
+            continue;
+        }
+        next[sKey] = Number(next[sKey] || 0) + sVal;
+    }
+    return next;
+}
+
+function getDailyDurationMapFromRecord(record) {
+    var daily = {};
+    if (record && record.dailyDurations && typeof record.dailyDurations === 'object') {
+        var keys = Object.keys(record.dailyDurations);
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var val = Number(record.dailyDurations[key] || 0);
+            if (Number.isFinite(val) && val > 0) {
+                daily[key] = val;
+            }
+        }
+    }
+    if (Object.keys(daily).length === 0 && record) {
+        var fallbackDate = getDateKeyFromTs(record.lastReadAt || record.updatedAt || Date.now());
+        var fallbackSec = Number(record.totalReadingSec || Math.floor(Number(record.totalReadingMs || 0) / 1000));
+        if (fallbackDate && Number.isFinite(fallbackSec) && fallbackSec > 0) {
+            daily[fallbackDate] = fallbackSec * 1000;
+        }
+    }
+    return daily;
+}
+
+function renderHeatmapToElement(elementSelector, dailyMap) {
+    var $heatmap = $(elementSelector);
+    if ($heatmap.length === 0) {
+        return { totalDays: 0, totalSeconds: 0, maxSeconds: 0 };
+    }
+    var keys = Object.keys(dailyMap || {});
+    var totalMs = 0;
+    var maxMs = 0;
+    for (var i = 0; i < keys.length; i++) {
+        var value = Number(dailyMap[keys[i]] || 0);
+        if (Number.isFinite(value) && value > 0) {
+            totalMs += value;
+            if (value > maxMs) {
+                maxMs = value;
+            }
+        }
+    }
+
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var start = new Date(today.getTime() - 83 * 24 * 60 * 60 * 1000);
+    start.setHours(0, 0, 0, 0);
+    var cells = [];
+    for (var d = 0; d < 84; d++) {
+        var current = new Date(start.getTime() + d * 24 * 60 * 60 * 1000);
+        var year = current.getFullYear();
+        var month = current.getMonth() + 1;
+        var day = current.getDate();
+        var key = year + '-' + (month < 10 ? '0' + month : '' + month) + '-' + (day < 10 ? '0' + day : '' + day);
+        var dayValueMs = Number((dailyMap || {})[key] || 0);
+        var dayValueSeconds = Math.floor(dayValueMs / 1000);
+        var intensity = getHeatmapIntensityClass(dayValueMs, maxMs);
+        var weekDay = current.getDay();
+        cells.push('<div class="readingtime-cell ' + intensity + ' wd-' + weekDay + '" title="' + escapeHtml(key + ' · ' + formatSeconds(dayValueSeconds)) + '"></div>');
+    }
+    $heatmap.html(cells.join(''));
+    return {
+        totalDays: keys.length,
+        totalSeconds: Math.floor(totalMs / 1000),
+        maxSeconds: Math.floor(maxMs / 1000)
+    };
+}
+
+function renderGlobalReadingTimeSummary(records) {
+    var list = Array.isArray(records) ? records : [];
+    var $title = $('#readingtime-agg-title');
+    var $subtitle = $('#readingtime-agg-subtitle');
+    var $grid = $('#readingtime-agg-summary-grid');
+    if ($title.length === 0 || $subtitle.length === 0 || $grid.length === 0) {
+        return;
+    }
+
+    if (list.length === 0) {
+        $title.text('所有书籍阅读汇总');
+        $subtitle.text('暂无统计数据');
+        $grid.html('<div class="readingtime-summary-empty">暂无阅读时间记录。</div>');
+        renderHeatmapToElement('#readingtime-agg-heatmap', {});
+        return;
+    }
+
+    var totalSec = 0;
+    var totalSessions = 0;
+    var lastReadAt = 0;
+    var firstReadAt = 0;
+    var dailyMerged = {};
+    var uniqueidBookCount = 0;
+    for (var i = 0; i < list.length; i++) {
+        var rec = list[i] || {};
+        var sec = Number(rec.totalReadingSec || Math.floor(Number(rec.totalReadingMs || 0) / 1000));
+        if (Number.isFinite(sec) && sec > 0) {
+            totalSec += sec;
+        }
+        var sessions = Number(rec.sessionCount || 0);
+        if (Number.isFinite(sessions) && sessions > 0) {
+            totalSessions += sessions;
+        }
+        var lr = Number(rec.lastReadAt || 0);
+        if (lr > lastReadAt) {
+            lastReadAt = lr;
+        }
+        var fr = Number(rec.firstReadAt || 0);
+        if (fr > 0) {
+            firstReadAt = firstReadAt > 0 ? Math.min(firstReadAt, fr) : fr;
+        }
+        if ((rec.uniqueid && String(rec.uniqueid).trim()) || (rec.bookuniqueid && String(rec.bookuniqueid).trim())) {
+            uniqueidBookCount += 1;
+        }
+        dailyMerged = mergeDailyDurationMaps(dailyMerged, getDailyDurationMapFromRecord(rec));
+    }
+
+    var heatmapStat = renderHeatmapToElement('#readingtime-agg-heatmap', dailyMerged);
+    var avgSessionSec = totalSessions > 0 ? Math.floor(totalSec / totalSessions) : 0;
+    var html = [
+        ['统计书籍', String(list.length)],
+        ['累计时长', formatSeconds(totalSec)],
+        ['累计秒数', String(totalSec)],
+        ['阅读次数', String(totalSessions)],
+        ['单次均值', formatSeconds(avgSessionSec)],
+        ['活跃天数', String(heatmapStat.totalDays)],
+        ['近84天峰值', formatSeconds(heatmapStat.maxSeconds)],
+        ['最近阅读', formatTimeStamp(lastReadAt)],
+        ['最早阅读', formatTimeStamp(firstReadAt)],
+        ['已设uniqueid', String(uniqueidBookCount)]
+    ];
+
+    var cells = [];
+    for (var h = 0; h < html.length; h++) {
+        cells.push('<div class="readingtime-summary-item"><div class="readingtime-summary-label">' + escapeHtml(html[h][0]) + '</div><div class="readingtime-summary-value">' + escapeHtml(html[h][1]) + '</div></div>');
+    }
+    $title.text('所有书籍阅读汇总');
+    $subtitle.text('更新时间：' + formatTimeStamp(lastReadAt));
+    $grid.html(cells.join(''));
+}
+
 function deleteBookmarkById(bookmarkId) {
     return new Promise(function (resolve) {
         chrome.runtime.sendMessage({ type: 'bookmarkDeleteById', id: bookmarkId }, function (response) {
@@ -436,6 +978,267 @@ function setBookmarkUniqueId(bookmarkId, bookuniqueid) {
     });
 }
 
+function setBookmarkUniqueIdByCururlKey(cururlKey, bookuniqueid) {
+    return new Promise(function (resolve) {
+        chrome.runtime.sendMessage({ type: 'bookmarkSetUniqueIdByCururlKey', cururlKey: cururlKey, bookuniqueid: bookuniqueid }, function (response) {
+            if (chrome.runtime.lastError) {
+                console.warn('setBookmarkUniqueIdByCururlKey failed:', chrome.runtime.lastError.message);
+                resolve(false);
+                return;
+            }
+            resolve(!!(response && response.ok));
+        });
+    });
+}
+
+function formatSeconds(totalSeconds) {
+    var sec = Number(totalSeconds || 0);
+    if (!Number.isFinite(sec) || sec <= 0) {
+        return '0秒';
+    }
+    var hours = Math.floor(sec / 3600);
+    var mins = Math.floor((sec % 3600) / 60);
+    var seconds = Math.floor(sec % 60);
+    var parts = [];
+    if (hours > 0) parts.push(hours + '小时');
+    if (mins > 0) parts.push(mins + '分');
+    if (hours === 0 && mins === 0) parts.push(seconds + '秒');
+    return parts.join('');
+}
+
+function formatTimeStamp(value) {
+    var ts = Number(value || 0);
+    if (!Number.isFinite(ts) || ts <= 0) {
+        return '-';
+    }
+    if (ts < 10000000000) {
+        ts = ts * 1000;
+    }
+    var d = new Date(ts);
+    if (isNaN(d.getTime())) {
+        return '-';
+    }
+    function pad(n) { return n < 10 ? '0' + n : '' + n; }
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+
+function getDateKeyFromTs(ts) {
+    var d = new Date(Number(ts || 0));
+    if (isNaN(d.getTime())) {
+        return '';
+    }
+    var year = d.getFullYear();
+    var month = d.getMonth() + 1;
+    var day = d.getDate();
+    return year + '-' + (month < 10 ? '0' + month : '' + month) + '-' + (day < 10 ? '0' + day : '' + day);
+}
+
+function escapeHtml(text) {
+    return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getBookIdentityKeyFromUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        return '';
+    }
+    try {
+        var parsed = new URL(rawUrl);
+        var parts = (parsed.pathname || '').split('/').filter(function (it) { return !!it; });
+        if (parts.length > 0) {
+            parts = parts.slice(0, parts.length - 1);
+        }
+        return parsed.origin + '/' + parts.join('/');
+    } catch (e) {
+        var normalized = rawUrl.split('#')[0].split('?')[0];
+        var arr = normalized.split('/');
+        if (arr.length > 0 && arr[arr.length - 1] === '') {
+            arr.pop();
+        }
+        if (arr.length > 0) {
+            arr.pop();
+        }
+        return arr.join('/');
+    }
+}
+
+function getBookmarkKey(bookmark) {
+    if (!bookmark) {
+        return '';
+    }
+    if (bookmark.id) {
+        return bookmark.id;
+    }
+    return 'book::' + getBookIdentityKeyFromUrl(bookmark.cururl || '');
+}
+
+function ensureReadingTimeModalUi() {
+    var $backdrop = $('#readingtime-modal-backdrop');
+    if ($backdrop.length === 0) {
+        return;
+    }
+    $('#readingtime-modal-close').off('click.readingtime').on('click.readingtime', function () {
+        closeReadingTimeModal();
+    });
+    $backdrop.off('click.readingtime').on('click.readingtime', function (e) {
+        if (e.target.id === 'readingtime-modal-backdrop') {
+            closeReadingTimeModal();
+        }
+    });
+    $(document).off('keydown.readingtime').on('keydown.readingtime', function (e) {
+        if (e.key === 'Escape') {
+            closeReadingTimeModal();
+        }
+    });
+}
+
+function closeReadingTimeModal() {
+    var $backdrop = $('#readingtime-modal-backdrop');
+    if ($backdrop.length === 0) {
+        return;
+    }
+    $backdrop.removeClass('show').attr('aria-hidden', 'true');
+}
+
+function ensureXmnoteSyncModalUi() {
+    var $backdrop = $('#xmnote-sync-modal-backdrop');
+    if ($backdrop.length === 0) {
+        return;
+    }
+
+    $('#xmnote-sync-close').off('click.xmnote').on('click.xmnote', function () {
+        closeXmnoteSyncModal();
+    });
+    $('#xmnote-sync-cancel').off('click.xmnote').on('click.xmnote', function () {
+        closeXmnoteSyncModal();
+    });
+    $('#xmnote-sync-submit').off('click.xmnote').on('click.xmnote', function () {
+        submitXmnoteSync();
+    });
+
+    $backdrop.off('click.xmnote').on('click.xmnote', function (e) {
+        if (e.target.id === 'xmnote-sync-modal-backdrop') {
+            closeXmnoteSyncModal();
+        }
+    });
+
+    $('input[name="xmnote-sync-mode"]').off('change.xmnote').on('change.xmnote', function () {
+        var mode = $('input[name="xmnote-sync-mode"]:checked').val() || 'all';
+        setXmnoteBookListDisabled(mode === 'all');
+    });
+}
+
+function getDailyDurationMap(record) {
+    var daily = {};
+    if (record && record.dailyDurations && typeof record.dailyDurations === 'object') {
+        var keys = Object.keys(record.dailyDurations);
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var val = Number(record.dailyDurations[key] || 0);
+            if (Number.isFinite(val) && val > 0) {
+                daily[key] = val;
+            }
+        }
+    }
+    if (Object.keys(daily).length === 0) {
+        var fallbackDate = getDateKeyFromTs(record && (record.lastReadAt || record.updatedAt || Date.now()));
+        var fallbackSeconds = Number(record && record.totalReadingSec);
+        if (!Number.isFinite(fallbackSeconds) || fallbackSeconds <= 0) {
+            fallbackSeconds = Math.floor(Number(record && record.totalReadingMs || 0) / 1000);
+        }
+        if (fallbackDate && fallbackSeconds > 0) {
+            daily[fallbackDate] = fallbackSeconds * 1000;
+        }
+    }
+    return daily;
+}
+
+function getHeatmapIntensityClass(value, maxValue) {
+    if (!value || value <= 0) {
+        return 'intensity-0';
+    }
+    if (!maxValue || maxValue <= 0) {
+        return 'intensity-1';
+    }
+    var ratio = value / maxValue;
+    if (ratio < 0.25) return 'intensity-1';
+    if (ratio < 0.5) return 'intensity-2';
+    if (ratio < 0.75) return 'intensity-3';
+    return 'intensity-4';
+}
+
+function renderReadingTimeHeatmap(record) {
+    var daily = getDailyDurationMap(record);
+    return renderHeatmapToElement('#readingtime-modal-heatmap', daily);
+}
+
+function renderReadingTimeModal(record, bookmark) {
+    ensureReadingTimeModalUi();
+    var $backdrop = $('#readingtime-modal-backdrop');
+    var $title = $('#readingtime-modal-title');
+    var $subtitle = $('#readingtime-modal-subtitle');
+    var $summary = $('#readingtime-modal-summary-grid');
+    if ($backdrop.length === 0 || $title.length === 0 || $subtitle.length === 0 || $summary.length === 0) {
+        return;
+    }
+
+    var titleText = (bookmark && bookmark.rTitle) || (record && record.rTitle) || '单书阅读时间统计';
+    var subtitleText = (record && record.cururl) || (bookmark && bookmark.cururl) || '';
+    $title.text(titleText);
+    $subtitle.text(subtitleText);
+
+    if (!record) {
+        $summary.html('<div class="readingtime-summary-empty">暂无阅读时间统计。</div>');
+        $('#readingtime-modal-heatmap').empty();
+        $backdrop.addClass('show').attr('aria-hidden', 'false');
+        return;
+    }
+
+    var heatmapStat = renderReadingTimeHeatmap(record);
+    var summaryItems = [
+        ['uniqueid', record.uniqueid || record.bookuniqueid || '-'],
+        ['累计时长', formatSeconds(record.totalReadingSec || Math.floor(Number(record.totalReadingMs || 0) / 1000))],
+        ['阅读次数', String(record.sessionCount || 0)],
+        ['首次阅读', formatTimeStamp(record.firstReadAt)],
+        ['最后阅读', formatTimeStamp(record.lastReadAt)],
+        ['活跃天数', String(heatmapStat.totalDays)],
+        ['近84天峰值', formatSeconds(heatmapStat.maxSeconds)],
+        ['更新时间', formatTimeStamp(record.updatedAt)]
+    ];
+
+    var html = [];
+    for (var i = 0; i < summaryItems.length; i++) {
+        html.push('<div class="readingtime-summary-item"><div class="readingtime-summary-label">' + escapeHtml(summaryItems[i][0]) + '</div><div class="readingtime-summary-value">' + escapeHtml(summaryItems[i][1]) + '</div></div>');
+    }
+    $summary.html(html.join(''));
+    $backdrop.addClass('show').attr('aria-hidden', 'false');
+}
+
+async function showReadingTimeForBookmark(bookmark) {
+    if (!bookmark) {
+        renderReadingTimeModal(null, null);
+        return;
+    }
+    var key = getBookmarkKey(bookmark);
+    var all = Array.isArray(readingTimeList) && readingTimeList.length > 0 ? readingTimeList : await getReadingTimeRecordsFromDb();
+    var found = null;
+    for (var i = 0; i < all.length; i++) {
+        var row = all[i];
+        if (!row) {
+            continue;
+        }
+        if ((row.id && row.id === key) || (row.cururlKey && row.cururlKey === getBookIdentityKeyFromUrl(bookmark.cururl || '')) || (row.uniqueid && bookmark.bookuniqueid && row.uniqueid === bookmark.bookuniqueid)) {
+            found = row;
+            break;
+        }
+    }
+    renderReadingTimeModal(found, bookmark);
+}
+
 function refreshDetailsPage() {
     chrome.storage.local.get({
         'clist': [], 'flist': [], 'tlist': [], 'plist': [], 'nlist': [],
@@ -451,7 +1254,10 @@ function refreshDetailsPage() {
         rjs = result.js;
         dir = result.dir;
         twocolumn = result.twocolumn;
-        bklist = await getBookmarksFromDb();
+        var loaded = await Promise.all([getBookmarksFromDb(), getReadingTimeRecordsFromDb(), getXmnoteSyncConfigFromStorage()]);
+        bklist = loaded[0];
+        readingTimeList = loaded[1];
+        xmnoteSyncConfig = loaded[2] || { endpoint: XMNOTE_DEFAULT_ENDPOINT };
         fontfamily = result.fontfamily || READER_FONT_DEFAULT_VALUE;
         $('#text-selector').val(JSON.stringify(clist));
         $('#text-filter').val(JSON.stringify(flist));
@@ -470,6 +1276,7 @@ function refreshDetailsPage() {
         $('#contentwidth').val(result.contentwidth);
         $('#contentwidth-val').text(result.contentwidth + 'px');
         renderFontFamilyOptions(fontfamily);
+        renderGlobalReadingTimeSummary(readingTimeList);
         // Load show
         displayPage();
     });
@@ -489,16 +1296,41 @@ function displayPage() {
 
     //Show:
     $('.bookmarks-list').empty();
+    ensureXmnoteSyncModalUi();
 
     for (var i = 0; i < bklist.length; i++) {
         var bookmarkId = bklist[i].id || '';
         var uniqueIdLabel = (bklist[i].bookuniqueid || '').trim();
         var uidTag = uniqueIdLabel ? ("<span class='uid-tag'>ID: " + uniqueIdLabel + "</span>") : '';
-        var cstr = "<li><span class='spanbut uid' title='设置唯一ID'>ID</span><span class='spanbut del'>删</span><span class='linka' bookmark-id='" + bookmarkId + "' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + uidTag + "</span></li>";
+        var cstr = "<li><span class='spanbut time' title='查看该书阅读时间'>时</span><span class='spanbut uid' title='设置唯一ID'>ID</span><span class='spanbut del'>删</span><span class='linka' bookmark-id='" + bookmarkId + "' ind='" + i + "' progress='" + bklist[i].curprog + "' href='" + bklist[i].cururl + "'>" + bklist[i].rTitle + uidTag + "</span></li>";
         $('.bookmarks-list').append(cstr);
     }
 
-    $('.uid.spanbut').off('click').on('click', async function () {
+    $('.time.spanbut').off('click').on('click', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var $target = $(this).parent().find('.linka').eq(0);
+        var ind = Number($target.attr('ind'));
+        if (!Number.isFinite(ind) || !bklist[ind]) {
+            showToast('未找到对应记录。', 'danger', 2200);
+            return;
+        }
+        await showReadingTimeForBookmark(bklist[ind]);
+    });
+
+    $('#readingtime-sync-btn').off('click').on('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!Array.isArray(readingTimeList) || readingTimeList.length === 0) {
+            showToast('暂无可同步的阅读时间记录。', 'danger', 2200);
+            return;
+        }
+        openXmnoteSyncModal();
+    });
+
+    $('.uid.spanbut').off('click').on('click', async function (e) {
+        e.preventDefault();
+        e.stopPropagation();
         var $target = $(this).parent().find('.linka').eq(0);
         var bookmarkId = $target.attr('bookmark-id') || '';
         var ind = Number($target.attr('ind'));

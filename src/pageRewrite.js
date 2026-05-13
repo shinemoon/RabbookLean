@@ -405,7 +405,8 @@ function rewritePage(url, startp) {
     // 封堵 beforeunload 弹窗（切章节时不应弹确认框）
     window.onbeforeunload = null;
     window.onunload = null;
-    window.addEventListener('beforeunload', function(e) { e.stopImmediatePropagation(); e.preventDefault(); delete e['returnValue']; }, true);
+    // 不调用 preventDefault/returnValue，避免浏览器出现“确认离开”提示。
+    window.addEventListener('beforeunload', function(e) { e.stopImmediatePropagation(); }, true);
 
     // 2. 封堵右键菜单（捕获阶段，优先级高于原页面任何 contextmenu 监听）
     window.addEventListener('contextmenu', function(e) { e.stopImmediatePropagation(); e.preventDefault(); }, true);
